@@ -1,0 +1,5 @@
+{
+  "name": "Clinic Patient Calling System",
+  "description": "An application for doctors and clinic staff to call patients by number with pre-recorded audio announcements. It features a simple interface with a numpad, destination buttons, and playback controls, optimized for speed and ease of use on a PC.",
+  "requestFramePermissions": []
+}
