@@ -7,7 +7,7 @@ import { Numpad } from './components/Numpad';
 import { StatusDisplay } from './components/StatusDisplay';
 import { LogViewer } from './components/LogViewer';
 import { Icon } from './components/Icon';
-import { getDivisionAudioRange, getDivisionAudioSource } from './audioSources';
+import { getDivisionAudioRange, getDivisionAudioSource, getStaffCallAudioSource } from './audioSources';
 import {
   DIVISION_LABELS,
   MAX_HISTORY,
@@ -19,6 +19,10 @@ import {
 const SpeakerIcon = () => <Icon path="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.66 1.905H6.44l4.5 4.5c.944.945 2.56.276 2.56-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06zM20.932 2.758a.75.75 0 011.061 0 13.5 13.5 0 010 18.484.75.75 0 01-1.06-1.061 12 12 0 000-16.362.75.75 0 010-1.06z" className="w-6 h-6 mr-2"/>
 const RepeatIcon = () => <Icon path="M16.023 9.348h4.992v-.001a.75.75 0 01.75.75v3.496a.75.75 0 01-1.5 0v-2.251h-3.988a4.502 4.502 0 01-1.464 2.98l.834.834a.75.75 0 11-1.06 1.06l-1.5-1.5a.75.75 0 010-1.06l1.5-1.5a.75.75 0 111.06 1.06l-.833.834a3.001 3.001 0 001.464-2.58h-.001zM2.977 15.348H7.969v.001a.75.75 0 00.75-.75V11.1a.75.75 0 00-1.5 0v2.25H4.012a4.502 4.502 0 011.464-2.98l-.834-.834a.75.75 0 10-1.06-1.06l-1.5 1.5a.75.75 0 000 1.06l1.5 1.5a.75.75 0 101.06-1.06l.833-.834a3.001 3.001 0 00-1.464 2.58h.001z" className="w-6 h-6 mr-2"/>
 const StopIcon = () => <Icon path="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="w-6 h-6 mr-2"/>
+
+
+const STAFF_CALL_ANNOUNCEMENT = 'スタッフをお呼び出し中';
+const STAFF_CALL_NUMBER = 'スタッフ';
 
 
 export default function App() {
@@ -101,11 +105,31 @@ export default function App() {
     setNumber('');
   }, [number, audio, addLog, setHistory]);
   
+  const handleStaffCall = useCallback(() => {
+    const audioSrc = getStaffCallAudioSource();
+    const announcementMessage = STAFF_CALL_ANNOUNCEMENT;
+
+    setAnnouncement(announcementMessage);
+    setLastCall({ number: STAFF_CALL_NUMBER, division: Division.Staff });
+    
+    audio.play(audioSrc);
+    
+    addLog({
+      number: STAFF_CALL_NUMBER,
+      division: Division.Staff,
+      status: 'success',
+      message: `再生開始: ${announcementMessage}`
+    });
+  }, [audio, addLog]);
+  
   const handleRepeat = useCallback(() => {
-    if(lastCall){
-      handlePlay(lastCall.division);
+    if (!lastCall) return;
+    if (lastCall.division === Division.Staff) {
+      handleStaffCall();
+      return;
     }
-  }, [lastCall, handlePlay]);
+    handlePlay(lastCall.division);
+  }, [lastCall, handlePlay, handleStaffCall]);
 
   const handleNumpad = (key: string) => {
     if (key === 'C') {
@@ -128,7 +152,11 @@ export default function App() {
         if(e.key === "Enter" && document.activeElement === mainInputRef.current) {
              e.preventDefault();
              if (lastCall?.division) {
-                handlePlay(lastCall.division);
+                if (lastCall.division === Division.Staff) {
+                  handleStaffCall();
+                } else {
+                  handlePlay(lastCall.division);
+                }
              } else {
                 handlePlay(Division.Exam); // Default to exam room if no last call
              }
@@ -149,10 +177,18 @@ export default function App() {
         handlePlay(Division.Exam);
     } else if (e.key === 'F3') {
         handlePlay(Division.Procedure);
+    } else if (e.key === 'F4') {
+        handleStaffCall();
     } else if (e.key === 'Enter') {
-        if(lastCall?.division) handlePlay(lastCall.division)
+        if (lastCall?.division) {
+          if (lastCall.division === Division.Staff) {
+            handleStaffCall();
+          } else {
+            handlePlay(lastCall.division);
+          }
+        }
     }
-  }, [handlePlay, audio, lastCall]);
+  }, [handlePlay, handleStaffCall, audio, lastCall]);
   
   useEffect(() => {
     window.addEventListener('keydown', handleKeyDown);
@@ -208,6 +244,21 @@ export default function App() {
           </div>
         </div>
         
+        <div className="rounded-2xl border border-dashed border-purple-300/60 dark:border-purple-600 bg-purple-50/70 dark:bg-purple-900/50 p-4 shadow-inner">
+          <div className="flex flex-col items-center gap-3">
+            <p className="text-xs font-semibold uppercase tracking-widest text-purple-600 dark:text-purple-300">スタッフ呼び出し</p>
+            <button
+              onClick={handleStaffCall}
+              disabled={audio.isPlaying}
+              className="w-full flex items-center justify-center gap-2 px-6 py-3 text-lg font-bold rounded-xl shadow-lg transition-all duration-150 bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              スタッフを呼び出す
+              <span className="text-sm font-normal opacity-80">(F4)</span>
+            </button>
+            <p className="text-xs text-center text-gray-600 dark:text-gray-300">音声が再生されている間は自動で停止するまで待機します。</p>
+          </div>
+        </div>
+
         {history.length > 0 && (
           <div>
             <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">入力履歴</h3>

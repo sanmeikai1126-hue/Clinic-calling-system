@@ -17,6 +17,7 @@ const divisionAudioMap: Record<Division, Map<number, string>> = {
   [Division.Reception]: new Map(),
   [Division.Exam]: new Map(),
   [Division.Procedure]: new Map(),
+  [Division.Staff]: new Map(),
 };
 
 Object.entries(allAudioFiles).forEach(([path, url]) => {
@@ -42,6 +43,7 @@ const divisionAudioRanges: Record<Division, { min: number; max: number } | null>
   [Division.Reception]: buildRange(Array.from(divisionAudioMap[Division.Reception].keys())),
   [Division.Exam]: buildRange(Array.from(divisionAudioMap[Division.Exam].keys())),
   [Division.Procedure]: buildRange(Array.from(divisionAudioMap[Division.Procedure].keys())),
+  [Division.Staff]: null,
 };
 
 export const getDivisionAudioSource = (division: Division, number: number): string | null => {
@@ -51,3 +53,7 @@ export const getDivisionAudioSource = (division: Division, number: number): stri
 export const getDivisionAudioRange = (division: Division): { min: number; max: number } | null => {
   return divisionAudioRanges[division];
 };
+
+const staffCallAudioUrl = new URL('./audio/staff/staff-call.mp3', import.meta.url).href;
+
+export const getStaffCallAudioSource = (): string => staffCallAudioUrl;

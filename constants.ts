@@ -5,6 +5,7 @@ export const DIVISION_LABELS: Record<Division, string> = {
   [Division.Reception]: '受付へ',
   [Division.Exam]: '診察室へ',
   [Division.Procedure]: '処置室へ',
+  [Division.Staff]: 'スタッフ呼び出し',
 };
 
 export const MAX_NUMBER = 200;
