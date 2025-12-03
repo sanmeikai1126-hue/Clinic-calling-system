@@ -199,7 +199,7 @@ export default function CallingPage() {
         <button
             onClick={() => handlePlay(division)}
             disabled={!number}
-            className="flex flex-col items-center justify-center text-xl font-bold rounded-lg shadow-lg transition-all duration-150 h-24 md:h-32 disabled:opacity-40 disabled:cursor-not-allowed bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 active:scale-95 disabled:bg-gray-500"
+            className="flex flex-col items-center justify-center text-xl font-bold rounded-xl shadow-md transition-all duration-150 h-24 md:h-32 disabled:opacity-40 disabled:cursor-not-allowed bg-sky-600 text-white hover:bg-sky-700 active:bg-sky-800 active:scale-95 disabled:bg-slate-400"
         >
             {DIVISION_LABELS[division]}
             <span className="text-sm font-normal mt-1 opacity-80">({shortcut})</span>
@@ -207,15 +207,19 @@ export default function CallingPage() {
     );
 
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100 flex items-center justify-center p-4">
-            <div className="w-full max-w-2xl mx-auto bg-gray-50 dark:bg-gray-800/50 p-4 sm:p-6 rounded-2xl shadow-2xl space-y-4">
+        <div className="min-h-[calc(100vh-140px)] flex items-center justify-center px-2 md:px-4 py-6">
+            <div className="w-full max-w-5xl mx-auto bg-white/95 backdrop-blur border border-slate-200 rounded-2xl shadow-xl p-5 md:p-8 space-y-6">
 
-                <header>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-center text-blue-600 dark:text-blue-400">患者呼び出しシステム</h1>
+                <header className="flex items-center justify-between">
+                    <div>
+                        <p className="text-xs font-semibold text-slate-500 uppercase tracking-[0.2em]">フロア呼び出し</p>
+                        <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 mt-1">患者呼び出しシステム</h1>
+                    </div>
+                    <span className="text-sm text-slate-500">F1〜F4キー対応</span>
                 </header>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex flex-col space-y-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
+                    <div className="flex flex-col space-y-3">
                         <div className="relative">
                             <input
                                 ref={mainInputRef}
@@ -228,14 +232,16 @@ export default function CallingPage() {
                                     }
                                 }}
                                 placeholder="番号入力"
-                                className="w-full text-5xl font-mono text-center p-4 rounded-lg bg-white dark:bg-gray-900 border-2 border-gray-300 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                                className="w-full text-5xl font-mono text-center p-4 rounded-xl bg-white border-2 border-slate-200 shadow-sm focus:ring-2 focus:ring-sky-400 focus:border-sky-400 outline-none transition"
                             />
                         </div>
-                        <Numpad onKeyPress={handleNumpad} />
+                        <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-2 shadow-inner">
+                            <Numpad onKeyPress={handleNumpad} />
+                        </div>
                     </div>
 
-                    <div className="flex flex-col space-y-2">
-                        <h2 className="text-sm font-semibold text-center text-gray-500 dark:text-gray-400 uppercase">呼び出し先</h2>
+                    <div className="flex flex-col space-y-3">
+                        <h2 className="text-sm font-semibold text-center text-slate-500 uppercase tracking-[0.08em]">呼び出し先</h2>
                         <div className="grid grid-cols-1 gap-2">
                             <DivisionButton division={Division.Reception} shortcut="F1" />
                             <DivisionButton division={Division.Exam} shortcut="F2" />
@@ -244,30 +250,30 @@ export default function CallingPage() {
                     </div>
                 </div>
 
-                <div className="rounded-2xl border border-dashed border-purple-300/60 dark:border-purple-600 bg-purple-50/70 dark:bg-purple-900/50 p-4 shadow-inner">
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-4 shadow-inner">
                     <div className="flex flex-col items-center gap-3">
-                        <p className="text-xs font-semibold uppercase tracking-widest text-purple-600 dark:text-purple-300">スタッフ呼び出し</p>
+                        <p className="text-xs font-semibold uppercase tracking-widest text-rose-500">スタッフ呼び出し</p>
                         <button
                             onClick={handleStaffCall}
                             disabled={audio.isPlaying}
-                            className="w-full flex items-center justify-center gap-2 px-6 py-3 text-lg font-bold rounded-xl shadow-lg transition-all duration-150 bg-purple-600 text-white hover:bg-purple-700 active:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-full flex items-center justify-center gap-2 px-6 py-3 text-lg font-bold rounded-xl shadow-lg transition-all duration-150 bg-rose-500 text-white hover:bg-rose-600 active:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                             スタッフを呼び出す
                             <span className="text-sm font-normal opacity-80">(F4)</span>
                         </button>
-                        <p className="text-xs text-center text-gray-600 dark:text-gray-300">音声が再生されている間は自動で停止するまで待機します。</p>
+                        <p className="text-xs text-center text-slate-600">音声が再生されている間は自動で停止するまで待機します。</p>
                     </div>
                 </div>
 
                 {history.length > 0 && (
-                    <div>
-                        <h3 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase mb-1">入力履歴</h3>
+                    <div className="space-y-2">
+                        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-[0.1em]">入力履歴</h3>
                         <div className="flex flex-wrap gap-2">
                             {history.map(h => (
                                 <button
                                     key={h}
                                     onClick={() => handleHistoryClick(h)}
-                                    className="px-3 py-1 text-sm font-mono bg-gray-200 dark:bg-gray-700 rounded-full hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors"
+                                    className="px-3 py-1 text-sm font-mono bg-slate-100 text-slate-700 border border-slate-200 rounded-full hover:bg-sky-100 hover:border-sky-200 transition-colors"
                                 >
                                     {h}
                                 </button>
@@ -282,7 +288,7 @@ export default function CallingPage() {
                     <button
                         onClick={handleRepeat}
                         disabled={!lastCall || audio.isPlaying}
-                        className="flex items-center justify-center p-3 text-lg font-semibold rounded-lg shadow-md transition-all duration-150 bg-green-500 text-white hover:bg-green-600 active:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="flex items-center justify-center p-3 text-lg font-semibold rounded-lg shadow-md transition-all duration-150 bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <RepeatIcon /> もう一度
                     </button>
@@ -308,9 +314,9 @@ export default function CallingPage() {
                             setVolume(newVolume);
                             audio.setVolume(newVolume);
                         }}
-                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer dark:bg-gray-700"
+                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
                     />
-                    <span className="text-sm font-mono w-12 text-center">{(volume * 100).toFixed(0)}%</span>
+                    <span className="text-sm font-mono w-12 text-center text-slate-700">{(volume * 100).toFixed(0)}%</span>
                 </div>
 
                 <LogViewer logs={logs} onClear={() => setLogs([])} />

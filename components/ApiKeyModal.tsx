@@ -20,7 +20,7 @@ const PROVIDER_CONFIG = {
         label: 'OpenAI',
         placeholder: 'sk-...',
         link: 'https://platform.openai.com/api-keys',
-        description: 'Whisper + GPT-4o'
+        description: 'Whisper + GPT-5-mini'
     }
 };
 

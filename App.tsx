@@ -15,7 +15,7 @@ const App: React.FC = () => {
         <HashRouter>
           <div className="min-h-screen flex flex-col">
             <Header />
-            <main className="flex-1">
+            <main className="flex-1 bg-gradient-to-b from-slate-50 via-white to-slate-100 px-3 pb-10">
               <Routes>
                 <Route path="/" element={<CallingPage />} />
                 <Route path="/record" element={<RecordPage />} />

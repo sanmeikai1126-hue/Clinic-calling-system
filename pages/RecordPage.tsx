@@ -462,7 +462,7 @@ const RecordPage: React.FC = () => {
 
   if (isProcessing) {
     const loaderText = provider === AIProvider.OPENAI
-      ? 'OpenAI (Whisper + GPT-4o) が音声を解析中... SOAPを作成しています'
+      ? 'OpenAI (Whisper + GPT-5-mini) が音声を解析中... SOAPを作成しています'
       : 'Gemini 2.5 Flashが音声を解析中... SOAPを作成しています';
 
     return (
@@ -534,7 +534,7 @@ const RecordPage: React.FC = () => {
                   } ${isRecording ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 {p === AIProvider.GEMINI && 'Gemini 2.5 Flash'}
-                {p === AIProvider.OPENAI && 'GPT-4o'}
+                {p === AIProvider.OPENAI && 'GPT-5-mini'}
               </button>
             ))}
           </div>

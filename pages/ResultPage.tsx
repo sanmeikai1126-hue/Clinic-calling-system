@@ -91,9 +91,9 @@ const ResultPage: React.FC = () => {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-64px)]">
+    <div className="max-w-6xl mx-auto w-full h-[calc(100vh-120px)] bg-white/95 backdrop-blur border border-slate-200 rounded-2xl shadow-xl overflow-hidden flex flex-col">
       {/* Toolbar */}
-      <div className="bg-white border-b border-gray-200 p-4 flex items-center justify-between shadow-sm z-10">
+      <div className="bg-white/95 border-b border-slate-200 p-4 flex items-center justify-between shadow-sm z-10">
         <div className="flex items-center gap-4">
           <button onClick={() => navigate('/')} className="text-gray-500 hover:text-gray-800 p-2 rounded-full hover:bg-gray-100">
             <ArrowLeft size={20} />
@@ -152,11 +152,11 @@ const ResultPage: React.FC = () => {
       </div>
 
       {/* Main Content - 2 Columns */}
-      <div className="flex-1 overflow-hidden flex flex-col md:flex-row">
+      <div className="flex-1 overflow-hidden flex flex-col md:flex-row bg-gradient-to-br from-slate-50 via-white to-slate-50">
 
         {/* Left: Transcript */}
-        <div className="w-full md:w-1/2 flex flex-col border-r border-gray-200 bg-gray-50">
-          <div className="p-3 bg-gray-100 border-b border-gray-200 text-sm font-semibold text-gray-700 uppercase tracking-wider">
+        <div className="w-full md:w-1/2 flex flex-col border-r border-slate-200 bg-slate-50/80">
+          <div className="p-3 bg-slate-100 border-b border-slate-200 text-sm font-semibold text-slate-700 uppercase tracking-wider">
             文字起こし (Transcript)
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
@@ -178,7 +178,7 @@ const ResultPage: React.FC = () => {
 
         {/* Right: SOAP */}
         <div className="w-full md:w-1/2 flex flex-col bg-white">
-          <div className="p-3 bg-gray-100 border-b border-gray-200 text-sm font-semibold text-gray-700 uppercase tracking-wider">
+          <div className="p-3 bg-slate-100 border-b border-slate-200 text-sm font-semibold text-slate-700 uppercase tracking-wider">
             SOAP ノート
           </div>
           <div className="flex-1 overflow-y-auto p-6 space-y-6">
