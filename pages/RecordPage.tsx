@@ -11,6 +11,7 @@ import { saveRecord } from '../services/storageService';
 import { useApiKey } from '../contexts/ApiKeyContext';
 import ApiKeyModal from '../components/ApiKeyModal';
 import FileUploadModal from '../components/FileUploadModal';
+import { useRecordingStatus } from '../contexts/RecordingContext';
 
 const getProviderLabel = (provider: AIProvider) => {
   return provider === AIProvider.OPENAI ? 'OpenAI (Whisper + GPT-4o)' : 'Gemini 2.5 Flash';
@@ -42,6 +43,7 @@ const buildApiErrorMessage = (error: any, provider: AIProvider) => {
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
   const { apiKeys } = useApiKey();
+  const { setRecordingActive } = useRecordingStatus();
 
   // State
   const [patientId, setPatientId] = useState('');
@@ -70,6 +72,11 @@ const RecordPage: React.FC = () => {
   // Refs for main recording (SOAP generation)
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
+
+  // Reset recording flag when leaving the page
+  useEffect(() => {
+    return () => setRecordingActive(false);
+  }, [setRecordingActive]);
 
   // ----------------------------------------------------------------
   // Main Audio Recording Logic (SOAP Generation)
@@ -115,6 +122,7 @@ const RecordPage: React.FC = () => {
 
       mediaRecorder.start(1000); // Request data every 1 second for safety
       setIsRecording(true);
+      setRecordingActive(true);
       setShowReviewModal(false);
 
     } catch (err) {
@@ -134,6 +142,7 @@ const RecordPage: React.FC = () => {
       }
       stopSpeechRecognition(); // Stop active listening
       setIsRecording(false); // Update UI state to "paused/stopped" look
+      setRecordingActive(false);
       setShowReviewModal(true);
     }
   };
@@ -142,6 +151,7 @@ const RecordPage: React.FC = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume();
       setIsRecording(true);
+      setRecordingActive(true);
       setShowReviewModal(false);
     }
   };
@@ -164,6 +174,7 @@ const RecordPage: React.FC = () => {
         mediaRecorderRef.current.stop();
       }
       setIsRecording(false);
+      setRecordingActive(false);
       setShowReviewModal(false);
 
       // Stop all tracks
@@ -179,7 +190,7 @@ const RecordPage: React.FC = () => {
         processAudio();
       }, 500);
     }
-  }, [stream]);
+  }, [stream, setRecordingActive]);
 
   const processAudio = async () => {
     setIsProcessing(true);

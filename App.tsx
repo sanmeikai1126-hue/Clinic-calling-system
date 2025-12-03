@@ -6,23 +6,26 @@ import RecordPage from './pages/RecordPage';
 import ResultPage from './pages/ResultPage';
 import HistoryPage from './pages/HistoryPage';
 import { ApiKeyProvider } from './contexts/ApiKeyContext';
+import { RecordingProvider } from './contexts/RecordingContext';
 
 const App: React.FC = () => {
   return (
     <ApiKeyProvider>
-      <HashRouter>
-        <div className="min-h-screen flex flex-col">
-          <Header />
-          <main className="flex-1">
-            <Routes>
-              <Route path="/" element={<CallingPage />} />
-              <Route path="/record" element={<RecordPage />} />
-              <Route path="/result" element={<ResultPage />} />
-              <Route path="/history" element={<HistoryPage />} />
-            </Routes>
-          </main>
-        </div>
-      </HashRouter>
+      <RecordingProvider>
+        <HashRouter>
+          <div className="min-h-screen flex flex-col">
+            <Header />
+            <main className="flex-1">
+              <Routes>
+                <Route path="/" element={<CallingPage />} />
+                <Route path="/record" element={<RecordPage />} />
+                <Route path="/result" element={<ResultPage />} />
+                <Route path="/history" element={<HistoryPage />} />
+              </Routes>
+            </main>
+          </div>
+        </HashRouter>
+      </RecordingProvider>
     </ApiKeyProvider>
   );
 };
