@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, Square, Globe, AlertCircle, Volume2, Play, FileText, Save, X, Upload } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import Visualizer from '../components/Visualizer';
 import Loader from '../components/Loader';
 import { AppMode, PatientInfo, ChatMessage, ChatRole, MedicalRecord, AIProvider } from '../types';
@@ -42,13 +42,14 @@ const buildApiErrorMessage = (error: any, provider: AIProvider) => {
 
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { apiKeys } = useApiKey();
-  const { setRecordingActive } = useRecordingStatus();
+  const { setRecordingActive, selectedProvider, setSelectedProvider } = useRecordingStatus();
 
   // State
   const [patientId, setPatientId] = useState('');
   const [patientName, setPatientName] = useState('');
-  const [provider, setProvider] = useState<AIProvider>(AIProvider.GEMINI);
+  const [provider, setProvider] = useState<AIProvider>(selectedProvider);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [mode, setMode] = useState<AppMode>(AppMode.STANDARD);
@@ -65,6 +66,7 @@ const RecordPage: React.FC = () => {
   const [activeRole, setActiveRole] = useState<ChatRole | null>(null);
   const recognitionRef = useRef<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const autoStartRef = useRef(false);
 
   // Track speech recognition indices to prevent duplication
   const speechMapRef = useRef<Map<number, string>>(new Map());
@@ -77,6 +79,10 @@ const RecordPage: React.FC = () => {
   useEffect(() => {
     return () => setRecordingActive(false);
   }, [setRecordingActive]);
+
+  useEffect(() => {
+    setProvider(selectedProvider);
+  }, [selectedProvider]);
 
   // ----------------------------------------------------------------
   // Main Audio Recording Logic (SOAP Generation)
@@ -455,6 +461,15 @@ const RecordPage: React.FC = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  // Auto-start recording when navigated from calling page
+  useEffect(() => {
+    const navState: any = location.state;
+    if (navState?.autoStart && !autoStartRef.current && !isRecording && !isProcessing) {
+      autoStartRef.current = true;
+      startMainRecording();
+    }
+  }, [location.state, isRecording, isProcessing, startMainRecording]);
+
 
   // ----------------------------------------------------------------
   // Render
@@ -543,10 +558,13 @@ const RecordPage: React.FC = () => {
         <div className="md:col-span-3 flex items-center gap-2 bg-gray-50 p-2 rounded-lg border border-gray-200">
           <span className="text-xs font-bold text-gray-500 px-2">AI Model:</span>
           <div className="flex-1 flex gap-2 overflow-x-auto">
-            {Object.values(AIProvider).map((p) => (
+            {[AIProvider.OPENAI, AIProvider.GEMINI].map((p) => (
               <button
                 key={p}
-                onClick={() => setProvider(p)}
+                onClick={() => {
+                  setProvider(p);
+                  setSelectedProvider(p);
+                }}
                 disabled={isRecording}
                 className={`px-3 py-1.5 rounded text-xs font-medium whitespace-nowrap transition-all ${provider === p
                   ? 'bg-teal-600 text-white shadow-sm'

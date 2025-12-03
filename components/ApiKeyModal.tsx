@@ -20,7 +20,7 @@ const PROVIDER_CONFIG = {
         label: 'OpenAI',
         placeholder: 'sk-...',
         link: 'https://platform.openai.com/api-keys',
-        description: 'Whisper + GPT-5-mini'
+    description: 'Whisper + GPT-5-mini'
     }
 };
 
@@ -146,7 +146,7 @@ const ApiKeyModal: React.FC<ApiKeyModalProps> = ({ isOpen, onClose, forceOpen = 
                         <p className="font-bold mb-1">注意:</p>
                         <ul className="list-disc list-inside space-y-1">
                             <li>キーはブラウザ内にのみ保存され、外部サーバーには送信されません。</li>
-                            <li>Gemini: ネイティブ音声処理 / OpenAI: Whisper + GPT-4o</li>
+                            <li>Gemini: ネイティブ音声処理 / OpenAI: Whisper + GPT-5-mini</li>
                         </ul>
                     </div>
                 </div>

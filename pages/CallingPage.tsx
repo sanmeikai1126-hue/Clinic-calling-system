@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Division, LogEntry } from '../types';
+import { Division, LogEntry, AIProvider } from '../types';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Numpad } from '../components/Numpad';
@@ -14,6 +14,8 @@ import {
     MAX_LOGS,
     MAX_NUMBER,
 } from '../constants';
+import { useNavigate } from 'react-router-dom';
+import { useRecordingStatus } from '../contexts/RecordingContext';
 
 
 const SpeakerIcon = () => <Icon path="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.66 1.905H6.44l4.5 4.5c.944.945 2.56.276 2.56-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06zM20.932 2.758a.75.75 0 011.061 0 13.5 13.5 0 010 18.484.75.75 0 01-1.06-1.061 12 12 0 000-16.362.75.75 0 010-1.06z" className="w-6 h-6 mr-2" />
@@ -29,6 +31,8 @@ export default function CallingPage() {
     const [number, setNumber] = useState<string>('');
     const [lastCall, setLastCall] = useState<{ number: string; division: Division } | null>(null);
     const [announcement, setAnnouncement] = useState<string | null>(null);
+    const navigate = useNavigate();
+    const { selectedProvider, setSelectedProvider } = useRecordingStatus();
 
     const [volume, setVolume] = useLocalStorage('clinic-call-volume', 0.8);
     const [history, setHistory] = useLocalStorage<string[]>('clinic-call-history', []);
@@ -102,8 +106,14 @@ export default function CallingPage() {
             const newHistory = [number, ...prev.filter(n => n !== number)];
             return newHistory.slice(0, MAX_HISTORY);
         });
+
+        if (division === Division.Exam) {
+            setTimeout(() => {
+                navigate('/record', { state: { autoStart: true, fromCall: true } });
+            }, 400);
+        }
         setNumber('');
-    }, [number, audio, addLog, setHistory]);
+    }, [number, audio, addLog, setHistory, navigate]);
 
     const handleStaffCall = useCallback(() => {
         const audioSrc = getStaffCallAudioSource();
@@ -217,6 +227,25 @@ export default function CallingPage() {
                     </div>
                     <span className="text-sm text-slate-500">F1〜F4キー対応</span>
                 </header>
+
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-inner">
+                    <div className="text-sm font-semibold text-slate-700">録音モデル</div>
+                    <div className="flex gap-2">
+                        {[AIProvider.OPENAI, AIProvider.GEMINI].map((p) => (
+                            <button
+                                key={p}
+                                onClick={() => setSelectedProvider(p)}
+                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition shadow-sm ${
+                                    selectedProvider === p
+                                        ? 'bg-teal-600 text-white border-teal-600 shadow-[0_8px_18px_rgba(13,148,136,0.2)]'
+                                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
+                                }`}
+                            >
+                                {p === AIProvider.OPENAI ? 'OpenAI (推奨)' : 'Gemini'}
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     <div className="flex flex-col space-y-3">
