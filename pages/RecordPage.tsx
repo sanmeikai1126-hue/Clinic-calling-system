@@ -14,7 +14,7 @@ import FileUploadModal from '../components/FileUploadModal';
 import { useRecordingStatus } from '../contexts/RecordingContext';
 
 const getProviderLabel = (provider: AIProvider) => {
-  return provider === AIProvider.OPENAI ? 'OpenAI (Whisper + GPT-4o)' : 'Gemini 2.5 Flash';
+  return provider === AIProvider.OPENAI ? 'OpenAI (Whisper + GPT-5-mini)' : 'Gemini 2.5 Flash';
 };
 
 const buildApiErrorMessage = (error: any, provider: AIProvider) => {

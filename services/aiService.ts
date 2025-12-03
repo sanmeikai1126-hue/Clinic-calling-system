@@ -2,6 +2,9 @@ import { AIProvider, AppMode, GeminiResponse } from '../types';
 import { generateClinicalNote as generateGemini } from './geminiService';
 import OpenAI from 'openai';
 
+// Default OpenAI chat model (user-requested)
+const DEFAULT_OPENAI_MODEL = 'gpt-5-mini';
+
 // Reusing the prompt from geminiService (copying it here to modify for text-based input)
 // We could export it from geminiService, but for decoupling let's redefine or import if possible.
 // For now, I'll redefine the core prompt but adapt it for text input.
@@ -131,7 +134,7 @@ const transcribeWithOpenAI = async (audioFile: File, apiKey: string): Promise<st
 };
 
 // Helper: Generate JSON with OpenAI
-const generateOpenAI = async (transcript: string, apiKey: string, model: string = 'gpt-4o'): Promise<GeminiResponse> => {
+const generateOpenAI = async (transcript: string, apiKey: string, model: string = DEFAULT_OPENAI_MODEL): Promise<GeminiResponse> => {
     const openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
 
     const completion = await openai.chat.completions.create({
@@ -164,7 +167,7 @@ export const generateClinicalNote = async (
     mimeType: string = 'audio/webm'
 ): Promise<GeminiResponse> => {
     const providerLabel = provider === AIProvider.OPENAI
-        ? 'OpenAI (Whisper + GPT-4o)'
+        ? `OpenAI (Whisper + ${DEFAULT_OPENAI_MODEL})`
         : 'Gemini (native audio)';
     console.log(`[AI] Routing request to ${providerLabel}`);
 
@@ -197,7 +200,7 @@ export const generateClinicalNote = async (
 
     switch (provider) {
         case AIProvider.OPENAI:
-            return await generateOpenAI(transcript, targetKey, 'gpt-4o');
+            return await generateOpenAI(transcript, targetKey, DEFAULT_OPENAI_MODEL);
         default:
             throw new Error("Unknown Provider");
     }
