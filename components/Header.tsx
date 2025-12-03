@@ -80,23 +80,39 @@ const Header: React.FC = () => {
             <div className="flex flex-wrap md:flex-nowrap items-center gap-2 bg-slate-50 border border-slate-200 rounded-full px-2 py-1.5 shadow-inner overflow-hidden max-w-full">
               {navItems.map((item) => {
                 const isActive = item.match?.some(path => location.pathname.startsWith(path)) || location.pathname === item.to;
+                const isRecordingTab = item.highlight;
                 const styles = toneStyles[item.tone];
                 const Icon = item.icon;
+                const iconRing = isRecordingTab && isRecordingActive
+                  ? 'bg-rose-50 border-rose-200 shadow-[0_8px_24px_rgba(244,63,94,0.2)]'
+                  : 'bg-white/80 border border-gray-200 shadow-sm';
+                const statusPill = isRecordingTab ? (
+                  <span
+                    className={`ml-auto flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full border ${
+                      isRecordingActive
+                        ? 'bg-rose-500/10 text-rose-700 border-rose-200'
+                        : 'bg-slate-100 text-slate-500 border-slate-200'
+                    }`}
+                  >
+                    <span
+                      className={`h-2.5 w-2.5 rounded-full ${
+                        isRecordingActive
+                          ? 'bg-rose-500 animate-pulse shadow-[0_0_0_5px_rgba(244,63,94,0.28)]'
+                          : 'bg-slate-300'
+                      }`}
+                    />
+                    {isRecordingActive ? 'REC' : 'OFF'}
+                  </span>
+                ) : null;
 
                 return (
                   <Link
                     key={item.to}
                     to={item.to}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`group relative min-w-[180px] flex items-center gap-3 px-4 py-2.5 rounded-full border font-semibold text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-500 ${isActive ? styles.active : styles.inactive}`}
+                    className={`group relative min-w-[190px] flex items-center gap-3 px-4 py-2.5 rounded-full border font-semibold text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-teal-500 ${isActive ? styles.active : styles.inactive}`}
                   >
-                    {item.highlight && isRecordingActive && !isActive && (
-                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-rose-500 shadow-[0_0_0_5px_rgba(244,63,94,0.24)] animate-pulse" aria-hidden="true" />
-                    )}
-                    {item.highlight && isRecordingActive && isActive && (
-                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-rose-500 shadow-[0_0_0_6px_rgba(244,63,94,0.32)]" aria-hidden="true" />
-                    )}
-                    <div className="h-10 w-10 rounded-full bg-white/80 border border-gray-200 flex items-center justify-center shadow-sm">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center ${iconRing}`}>
                       <Icon size={18} className="text-current" />
                     </div>
                     <div className="flex flex-col leading-tight text-left">
@@ -105,6 +121,7 @@ const Header: React.FC = () => {
                         {item.description}
                       </span>
                     </div>
+                    {statusPill}
                     <span
                       className={`absolute inset-x-4 -bottom-2 h-1 rounded-full transition ${
                         isActive
@@ -118,13 +135,13 @@ const Header: React.FC = () => {
             </div>
           </nav>
 
-            <button
-              onClick={() => setIsModalOpen(true)}
-              className="p-2 text-gray-500 hover:text-teal-700 hover:bg-gray-100 rounded-full transition"
-              title="API Key Settings"
-            >
-              <Settings size={20} />
-            </button>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="p-2 text-gray-500 hover:text-teal-700 hover:bg-gray-100 rounded-full transition"
+            title="API Key Settings"
+          >
+            <Settings size={20} />
+          </button>
         </div>
       </header>
 

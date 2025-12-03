@@ -475,6 +475,26 @@ const RecordPage: React.FC = () => {
   return (
     <div className="max-w-4xl mx-auto w-full p-6 space-y-6 h-[calc(100vh-80px)] flex flex-col relative">
 
+      <div className={`flex items-center gap-3 rounded-xl border px-4 py-3 shadow-sm ${isRecording ? 'bg-rose-50 border-rose-200' : 'bg-slate-50 border-slate-200'}`}>
+        <div className={`h-3 w-3 rounded-full ${isRecording ? 'bg-rose-500 animate-pulse shadow-[0_0_0_6px_rgba(244,63,94,0.2)]' : 'bg-slate-300 shadow-inner'}`} />
+        <div className="flex-1">
+          <p className="text-sm font-semibold text-slate-800">
+            {isRecording ? '録音中 - 診察が終わったら停止してください' : '録音待機中 - 診察開始時に録音を押してください'}
+          </p>
+          <p className="text-xs text-slate-500">
+            {isRecording ? '停止するとSOAP生成に進みます' : '録音を開始するとこのバーが赤く変わります'}
+          </p>
+        </div>
+        {!isRecording && (
+          <button
+            onClick={startMainRecording}
+            className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-semibold shadow hover:bg-emerald-600"
+          >
+            録音開始
+          </button>
+        )}
+      </div>
+
       {/* Top Controls (Patient Info & Mode) */}
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
         <div className="md:col-span-2 flex gap-4 items-center">
