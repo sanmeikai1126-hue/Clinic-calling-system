@@ -12,6 +12,33 @@ import { useApiKey } from '../contexts/ApiKeyContext';
 import ApiKeyModal from '../components/ApiKeyModal';
 import FileUploadModal from '../components/FileUploadModal';
 
+const getProviderLabel = (provider: AIProvider) => {
+  return provider === AIProvider.OPENAI ? 'OpenAI (Whisper + GPT-4o)' : 'Gemini 2.5 Flash';
+};
+
+const buildApiErrorMessage = (error: any, provider: AIProvider) => {
+  const providerLabel = provider === AIProvider.OPENAI ? 'OpenAI API' : 'Gemini API';
+  const detail = error?.message || '';
+
+  let message = `${providerLabel}との通信に失敗しました。`;
+
+  if (detail.includes("400")) {
+    message += " (リクエスト不正: ファイル形式や長さの問題の可能性があります)";
+  } else if (detail.includes("401") || detail.includes("API Key")) {
+    message += " (APIキーが無効です)";
+  } else if (detail.includes("429") || error?.status === 429) {
+    message += provider === AIProvider.OPENAI
+      ? " (OpenAIの利用制限/残高不足の可能性があります)"
+      : " (利用制限を超過しました)";
+  } else if (detail.includes("500") || detail.includes("503") || error?.status === 500 || error?.status === 503) {
+    message += " (サーバーエラー: しばらく待ってから再試行してください)";
+  } else {
+    message += " APIキーやネットワーク接続を確認してください。";
+  }
+
+  return message;
+};
+
 const RecordPage: React.FC = () => {
   const navigate = useNavigate();
   const { apiKeys } = useApiKey();
@@ -172,20 +199,8 @@ const RecordPage: React.FC = () => {
           const patientInfo: PatientInfo = { id: patientId, name: patientName };
           navigate('/result', { state: { result, patientInfo } });
         } catch (apiError: any) {
-          console.error("Gemini API Error Details:", apiError);
-          let errorMessage = "Gemini APIとの通信に失敗しました。";
-
-          if (apiError.message?.includes("400")) {
-            errorMessage += " (リクエスト不正: ファイル形式や長さの問題の可能性があります)";
-          } else if (apiError.message?.includes("401") || apiError.message?.includes("API Key")) {
-            errorMessage += " (APIキーが無効です)";
-          } else if (apiError.message?.includes("429")) {
-            errorMessage += " (利用制限を超過しました)";
-          } else if (apiError.message?.includes("500") || apiError.message?.includes("503")) {
-            errorMessage += " (サーバーエラー: しばらく待ってから再試行してください)";
-          } else {
-            errorMessage += " APIキーやネットワーク接続を確認してください。";
-          }
+          console.error(`${getProviderLabel(provider)} Error Details:`, apiError);
+          const errorMessage = buildApiErrorMessage(apiError, provider);
 
           // Save blob for potential download
           setFailedAudioBlob(blob);
@@ -234,20 +249,8 @@ const RecordPage: React.FC = () => {
           const patientInfo: PatientInfo = { id: patientId, name: patientName };
           navigate('/result', { state: { result, patientInfo } });
         } catch (apiError: any) {
-          console.error("Gemini API Error Details:", apiError);
-          let errorMessage = "Gemini APIとの通信に失敗しました。";
-
-          if (apiError.message?.includes("400")) {
-            errorMessage += " (リクエスト不正: ファイル形式や長さの問題の可能性があります)";
-          } else if (apiError.message?.includes("401") || apiError.message?.includes("API Key")) {
-            errorMessage += " (APIキーが無効です)";
-          } else if (apiError.message?.includes("429")) {
-            errorMessage += " (利用制限を超過しました)";
-          } else if (apiError.message?.includes("500") || apiError.message?.includes("503")) {
-            errorMessage += " (サーバーエラー: しばらく待ってから再試行してください)";
-          } else {
-            errorMessage += " APIキーやネットワーク接続を確認してください。";
-          }
+          console.error(`${getProviderLabel(provider)} Error Details:`, apiError);
+          const errorMessage = buildApiErrorMessage(apiError, provider);
 
           setError(errorMessage);
           setIsProcessing(false);
@@ -447,9 +450,13 @@ const RecordPage: React.FC = () => {
   // ----------------------------------------------------------------
 
   if (isProcessing) {
+    const loaderText = provider === AIProvider.OPENAI
+      ? 'OpenAI (Whisper + GPT-4o) が音声を解析中... SOAPを作成しています'
+      : 'Gemini 2.5 Flashが音声を解析中... SOAPを作成しています';
+
     return (
       <div className="flex-1 flex items-center justify-center bg-white">
-        <Loader text="Gemini 2.5 Flashが音声を解析中... SOAPを作成しています" />
+        <Loader text={loaderText} />
       </div>
     );
   }
@@ -755,7 +762,7 @@ const RecordPage: React.FC = () => {
 
       {!showReviewModal && (
         <div className="text-center text-xs text-gray-400">
-          Powered by {provider} & Web Speech API
+          Powered by {getProviderLabel(provider)} & Web Speech API
         </div>
       )}
 

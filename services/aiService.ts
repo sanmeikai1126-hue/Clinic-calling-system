@@ -163,6 +163,10 @@ export const generateClinicalNote = async (
     apiKeys: Record<string, string>,
     mimeType: string = 'audio/webm'
 ): Promise<GeminiResponse> => {
+    const providerLabel = provider === AIProvider.OPENAI
+        ? 'OpenAI (Whisper + GPT-4o)'
+        : 'Gemini (native audio)';
+    console.log(`[AI] Routing request to ${providerLabel}`);
 
     // 1. Gemini (Native Multimodal)
     if (provider === AIProvider.GEMINI) {
