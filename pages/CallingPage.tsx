@@ -4,8 +4,6 @@ import { Division, LogEntry, AIProvider } from '../types';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Numpad } from '../components/Numpad';
-import { StatusDisplay } from '../components/StatusDisplay';
-import { LogViewer } from '../components/LogViewer';
 import { Icon } from '../components/Icon';
 import { getDivisionAudioRange, getDivisionAudioSource, getStaffCallAudioSource } from '../audioSources';
 import {
@@ -16,11 +14,6 @@ import {
 } from '../constants';
 import { useNavigate } from 'react-router-dom';
 import { useRecordingStatus } from '../contexts/RecordingContext';
-
-
-const SpeakerIcon = () => <Icon path="M13.5 4.06c0-1.336-1.616-2.005-2.56-1.06l-4.5 4.5H4.508c-1.141 0-2.318.664-2.66 1.905A9.76 9.76 0 001.5 12c0 .898.121 1.768.35 2.595.341 1.24 1.518 1.905 2.66 1.905H6.44l4.5 4.5c.944.945 2.56.276 2.56-1.06V4.06zM18.584 5.106a.75.75 0 011.06 0c3.808 3.807 3.808 9.98 0 13.788a.75.75 0 11-1.06-1.06 8.25 8.25 0 000-11.668.75.75 0 010-1.06zM20.932 2.758a.75.75 0 011.061 0 13.5 13.5 0 010 18.484.75.75 0 01-1.06-1.061 12 12 0 000-16.362.75.75 0 010-1.06z" className="w-6 h-6 mr-2" />
-const RepeatIcon = () => <Icon path="M16.023 9.348h4.992v-.001a.75.75 0 01.75.75v3.496a.75.75 0 01-1.5 0v-2.251h-3.988a4.502 4.502 0 01-1.464 2.98l.834.834a.75.75 0 11-1.06 1.06l-1.5-1.5a.75.75 0 010-1.06l1.5-1.5a.75.75 0 111.06 1.06l-.833.834a3.001 3.001 0 001.464-2.58h-.001zM2.977 15.348H7.969v.001a.75.75 0 00.75-.75V11.1a.75.75 0 00-1.5 0v2.25H4.012a4.502 4.502 0 011.464-2.98l-.834-.834a.75.75 0 10-1.06-1.06l-1.5 1.5a.75.75 0 000 1.06l1.5 1.5a.75.75 0 101.06-1.06l.833-.834a3.001 3.001 0 00-1.464 2.58h.001z" className="w-6 h-6 mr-2" />
-const StopIcon = () => <Icon path="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" className="w-6 h-6 mr-2" />
 
 
 const STAFF_CALL_ANNOUNCEMENT = 'スタッフをお呼び出し中';
@@ -34,11 +27,10 @@ export default function CallingPage() {
     const navigate = useNavigate();
     const { selectedProvider, setSelectedProvider } = useRecordingStatus();
 
-    const [volume, setVolume] = useLocalStorage('clinic-call-volume', 0.8);
     const [history, setHistory] = useLocalStorage<string[]>('clinic-call-history', []);
-    const [logs, setLogs] = useLocalStorage<LogEntry[]>('clinic-call-logs', []);
+    const [, setLogs] = useLocalStorage<LogEntry[]>('clinic-call-logs', []);
 
-    const audio = useAudioPlayer(volume);
+    const audio = useAudioPlayer(0.8);
     const mainInputRef = useRef<HTMLInputElement>(null);
 
     const addLog = useCallback((log: Omit<LogEntry, 'timestamp'>) => {
@@ -132,15 +124,6 @@ export default function CallingPage() {
         });
     }, [audio, addLog]);
 
-    const handleRepeat = useCallback(() => {
-        if (!lastCall) return;
-        if (lastCall.division === Division.Staff) {
-            handleStaffCall();
-            return;
-        }
-        handlePlay(lastCall.division);
-    }, [lastCall, handlePlay, handleStaffCall]);
-
     const handleNumpad = (key: string) => {
         if (key === 'C') {
             setNumber('');
@@ -189,14 +172,6 @@ export default function CallingPage() {
             handlePlay(Division.Procedure);
         } else if (e.key === 'F4') {
             handleStaffCall();
-        } else if (e.key === 'Enter') {
-            if (lastCall?.division) {
-                if (lastCall.division === Division.Staff) {
-                    handleStaffCall();
-                } else {
-                    handlePlay(lastCall.division);
-                }
-            }
         }
     }, [handlePlay, handleStaffCall, audio, lastCall]);
 
@@ -311,44 +286,6 @@ export default function CallingPage() {
                     </div>
                 )}
 
-                <StatusDisplay announcement={audio.isPlaying ? announcement : null} error={audio.error} currentTime={audio.currentTime} duration={audio.duration} />
-
-                <div className="grid grid-cols-2 gap-2 pt-2">
-                    <button
-                        onClick={handleRepeat}
-                        disabled={!lastCall || audio.isPlaying}
-                        className="flex items-center justify-center p-3 text-lg font-semibold rounded-lg shadow-md transition-all duration-150 bg-emerald-500 text-white hover:bg-emerald-600 active:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <RepeatIcon /> もう一度
-                    </button>
-                    <button
-                        onClick={audio.stop}
-                        disabled={!audio.isPlaying}
-                        className="flex items-center justify-center p-3 text-lg font-semibold rounded-lg shadow-md transition-all duration-150 bg-red-500 text-white hover:bg-red-600 active:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <StopIcon /> 停止
-                    </button>
-                </div>
-
-                <div className="flex items-center space-x-3">
-                    <SpeakerIcon />
-                    <input
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.05"
-                        value={volume}
-                        onChange={(e) => {
-                            const newVolume = parseFloat(e.target.value);
-                            setVolume(newVolume);
-                            audio.setVolume(newVolume);
-                        }}
-                        className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-600"
-                    />
-                    <span className="text-sm font-mono w-12 text-center text-slate-700">{(volume * 100).toFixed(0)}%</span>
-                </div>
-
-                <LogViewer logs={logs} onClear={() => setLogs([])} />
             </div>
         </div>
     );

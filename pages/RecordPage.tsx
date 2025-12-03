@@ -2,7 +2,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Mic, Square, Globe, AlertCircle, Volume2, Play, FileText, Save, X, Upload } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import Visualizer from '../components/Visualizer';
 import Loader from '../components/Loader';
 import { AppMode, PatientInfo, ChatMessage, ChatRole, MedicalRecord, AIProvider } from '../types';
 import { generateClinicalNote } from '../services/aiService';
@@ -511,8 +510,8 @@ const RecordPage: React.FC = () => {
       </div>
 
       {/* Top Controls (Patient Info & Mode) */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
-        <div className="md:col-span-2 flex gap-4 items-center">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+        <div className="md:col-span-2 flex gap-4 items-end">
           <div className="flex-1">
             <label className="text-xs text-gray-500 block">氏名</label>
             <input
@@ -535,7 +534,7 @@ const RecordPage: React.FC = () => {
           </div>
         </div>
 
-        <div className="flex justify-end bg-gray-100 p-1 rounded-lg">
+        <div className="flex justify-end bg-gray-100 p-1 rounded-lg self-end">
           <button
             onClick={() => setMode(AppMode.STANDARD)}
             disabled={isRecording}
@@ -724,8 +723,6 @@ const RecordPage: React.FC = () => {
             <p className="text-gray-500 text-lg font-medium mb-4">
               {isRecording ? "録音中... 診療を行ってください" : "ボタンを押して診療を開始"}
             </p>
-            <Visualizer stream={stream} isRecording={isRecording} />
-
             {!isRecording && (
               <div className="pt-4 border-t border-gray-200">
                 <button
