@@ -13,6 +13,8 @@ type RecordingContextValue = {
   liveTranscription: string;
   setLiveTranscription: (text: string) => void;
   appendLiveTranscription: (text: string) => void;
+  audioBlob: Blob | null;
+  setAudioBlob: (blob: Blob | null) => void;
 };
 
 const RecordingContext = createContext<RecordingContextValue | undefined>(undefined);
@@ -22,6 +24,7 @@ export const RecordingProvider: React.FC<{ children: ReactNode }> = ({ children 
   const [selectedProvider, setSelectedProvider] = useState<AIProvider>(AIProvider.OPENAI);
   const [liveClient, setLiveClient] = useState<MultimodalLiveClient | null>(null);
   const [liveTranscription, setLiveTranscription] = useState<string>('');
+  const [audioBlob, setAudioBlob] = useState<Blob | null>(null);
 
   const appendLiveTranscription = (text: string) => {
     setLiveTranscription(prev => prev + text);
@@ -37,7 +40,9 @@ export const RecordingProvider: React.FC<{ children: ReactNode }> = ({ children 
       setLiveClient,
       liveTranscription,
       setLiveTranscription,
-      appendLiveTranscription
+      appendLiveTranscription,
+      audioBlob,
+      setAudioBlob
     }}>
       {children}
     </RecordingContext.Provider>

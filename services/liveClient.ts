@@ -176,13 +176,14 @@ export class MultimodalLiveClient extends SimpleEventEmitter {
                 console.log('[Live API] Server content received:', data.serverContent);
                 const content = data.serverContent;
 
+                // Handle model turns (both transcription and SOAP generation)
                 if (content.modelTurn) {
                     console.log('[Live API] Model turn detected');
                     const parts = content.modelTurn.parts;
                     if (parts) {
                         for (const part of parts) {
                             if (part.text) {
-                                console.log('[Live API] Emitting text content:', part.text);
+                                console.log('[Live API] Emitting content:', part.text);
                                 this.emit('content', part.text);
                             }
                         }

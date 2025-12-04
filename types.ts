@@ -29,7 +29,7 @@ export interface SoapContent {
 }
 
 export interface GeminiResponse {
-  language: string;
+  language?: string;
   transcription: TranscriptItem[];
   soap: SoapContent;
   usedModel?: string; // Model used for generation (e.g., gemini-2.5-flash)

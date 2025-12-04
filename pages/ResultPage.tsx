@@ -16,7 +16,13 @@ const ResultPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as LocationState;
-  const { liveClient, liveTranscription, setLiveClient, setLiveTranscription } = useRecordingStatus();
+  const {
+    liveClient,
+    setLiveClient,
+    liveTranscription,
+    appendLiveTranscription,
+    audioBlob
+  } = useRecordingStatus();
 
   // Determine if this is Live Mode
   const isLiveMode = state?.isLiveMode || false;
@@ -39,8 +45,11 @@ const ResultPage: React.FC = () => {
   // Live Mode: Parse transcription by speaker
   useEffect(() => {
     if (isLiveMode && liveTranscription) {
+      // Filter out SOAP JSON blocks before parsing
+      const filteredTranscription = liveTranscription.replace(/```json[\s\S]*?```/g, '').trim();
+
       // Parse 【医師】 and 【患者】 markers
-      const lines = liveTranscription.split('\n').filter(line => line.trim());
+      const lines = filteredTranscription.split('\n').filter(line => line.trim());
       const parsed: { speaker: string, text: string }[] = [];
 
       for (const line of lines) {
@@ -89,6 +98,7 @@ const ResultPage: React.FC = () => {
           if (soapData) {
             console.log('[ResultPage] Parsed SOAP data:', soapData);
             setSoap(soapData);
+            console.log('[ResultPage] Called setSoap with:', soapData);
             setIsGeneratingSOAP(false);
           }
         } catch (e) {
@@ -98,16 +108,28 @@ const ResultPage: React.FC = () => {
     }
   }, [liveTranscription, isLiveMode, isGeneratingSOAP]);
 
+  // Debug: Log soap state changes
+  useEffect(() => {
+    if (isLiveMode) {
+      console.log('[ResultPage] SOAP state updated:', soap);
+    }
+  }, [soap, isLiveMode]);
+
   if (!state) return null;
 
   const handleSave = () => {
+    // Parse Live mode transcription into structured format
+    let finalTranscription = transcription;
+    if (isLiveMode) {
+      finalTranscription = parsedLiveTranscription.length > 0 ? parsedLiveTranscription : transcription;
+    }
+
     const record: MedicalRecord = {
       id: Date.now().toString(),
       date: new Date().toISOString(),
       patient: patientInfo,
       data: {
-        ...state.result,
-        transcription,
+        transcription: finalTranscription,
         soap
       }
     };
@@ -186,19 +208,50 @@ ${transcriptContent}
     if (!liveClient) return;
     setIsGeneratingSOAP(true);
 
-    // Send full DERMATOLOGY_PROMPT with conversation history to generate SOAP
+    // Send SOAP generation request with strict JSON format requirement
     const soapGenerationPrompt = `
 ${DERMATOLOGY_PROMPT}
 
 **これまでの会話内容**:
 ${liveTranscription}
 
-**指示**:
-上記の会話内容に基づいて、SOAPノートを作成してください。
-出力は指定されたJSON形式のみで、他のテキストは一切含めないでください。
+**重要な指示**:
+上記の会話内容に基づいてSOAPノートを作成してください。
+
+**出力形式（厳守）**:
+必ず以下のJSON形式のみで出力してください。他のテキストは一切含めないでください。
+
+\`\`\`json
+{
+  "S": "主訴の内容",
+  "O": "客観的所見",
+  "A": "診断・評価",
+  "P": "治療計画"
+}
+\`\`\`
+
+JSON以外のテキスト、説明、コメントは絶対に出力しないでください。
 `;
 
     liveClient.sendText(soapGenerationPrompt);
+
+    // Auto-stop Live session after SOAP generation (will stop when SOAP is parsed)
+  };
+
+  const handleDownloadAudio = () => {
+    if (!audioBlob) {
+      alert('録音データがありません');
+      return;
+    }
+
+    const url = URL.createObjectURL(audioBlob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `recording_${new Date().toISOString().slice(0, 10)}.webm`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   };
 
   return (
