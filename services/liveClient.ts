@@ -44,7 +44,7 @@ export class MultimodalLiveClient extends SimpleEventEmitter {
 
     constructor(apiKey: string) {
         super();
-        this.url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${apiKey}`;
+        this.url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${apiKey}`;
     }
 
     connect(config: LiveConfig): Promise<void> {
@@ -137,29 +137,52 @@ export class MultimodalLiveClient extends SimpleEventEmitter {
         this.ws.send(JSON.stringify(textMessage));
     }
 
-    private handleMessage(event: MessageEvent) {
+    private async handleMessage(event: MessageEvent) {
         try {
             let data;
             if (event.data instanceof Blob) {
-                // Handle binary data if necessary (usually response audio)
-                // For now we expect JSON text for transcription/SOAP
-                // But the API might send Blob for audio
-                console.log("Received Blob message, ignoring for now");
-                return;
+                // Blob messages might contain server messages
+                console.log('[Live API] Received Blob message, size:', event.data.size);
+
+                // Try to read Blob as text to see if it contains JSON
+                try {
+                    const text = await event.data.text();
+                    console.log('[Live API] Blob content (first 200 chars):', text.substring(0, 200));
+
+                    // Try to parse as JSON
+                    try {
+                        data = JSON.parse(text);
+                        console.log('[Live API] Blob contained JSON:', data);
+                    } catch (e) {
+                        // Not JSON, probably audio data
+                        console.log('[Live API] Blob is binary/audio data, not JSON');
+                        return;
+                    }
+                } catch (e) {
+                    console.log('[Live API] Could not read Blob as text');
+                    return;
+                }
             } else {
                 data = JSON.parse(event.data);
             }
 
-            // console.log('Received Message:', data);
+            console.log('[Live API] Received JSON Message:', JSON.stringify(data, null, 2));
+
+            if (data.setupComplete) {
+                console.log('[Live API] Setup completed successfully');
+            }
 
             if (data.serverContent) {
+                console.log('[Live API] Server content received:', data.serverContent);
                 const content = data.serverContent;
 
                 if (content.modelTurn) {
+                    console.log('[Live API] Model turn detected');
                     const parts = content.modelTurn.parts;
                     if (parts) {
                         for (const part of parts) {
                             if (part.text) {
+                                console.log('[Live API] Emitting text content:', part.text);
                                 this.emit('content', part.text);
                             }
                         }
@@ -167,16 +190,18 @@ export class MultimodalLiveClient extends SimpleEventEmitter {
                 }
 
                 if (content.turnComplete) {
+                    console.log('[Live API] Turn complete');
                     this.emit('turnComplete');
                 }
             }
 
             if (data.toolCall) {
                 // Handle tool calls if we add them later
+                console.log('[Live API] Tool call received (not implemented)');
             }
 
         } catch (e) {
-            console.error('Error parsing message:', e);
+            console.error('[Live API] Error parsing message:', e, 'Raw data:', event.data);
         }
     }
 }

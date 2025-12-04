@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import Loader from '../components/Loader';
 import { AppMode, PatientInfo, ChatMessage, ChatRole, MedicalRecord, AIProvider } from '../types';
 import { generateClinicalNote } from '../services/aiService';
-import { translateText, DERMATOLOGY_PROMPT } from '../services/geminiService';
+import { translateText, DERMATOLOGY_PROMPT, LIVE_TRANSCRIPTION_PROMPT } from '../services/geminiService';
 import { saveRecord } from '../services/storageService';
 import { useApiKey } from '../contexts/ApiKeyContext';
 import ApiKeyModal from '../components/ApiKeyModal';
@@ -45,7 +45,14 @@ const RecordPage: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { apiKeys } = useApiKey();
-  const { setRecordingActive, selectedProvider, setSelectedProvider } = useRecordingStatus();
+  const {
+    setRecordingActive,
+    selectedProvider,
+    setSelectedProvider,
+    setLiveClient,
+    setLiveTranscription,
+    appendLiveTranscription
+  } = useRecordingStatus();
 
   // State
   const [patientId, setPatientId] = useState('');
@@ -61,10 +68,7 @@ const RecordPage: React.FC = () => {
   const [failedAudioBlob, setFailedAudioBlob] = useState<Blob | null>(null);
   const [showUploadModal, setShowUploadModal] = useState(false);
 
-  // Live Mode State
-  const [liveTranscription, setLiveTranscription] = useState<string>("");
-  const [isLiveConnected, setIsLiveConnected] = useState(false);
-  const liveClientRef = useRef<MultimodalLiveClient | null>(null);
+  // Live Mode State (using audio recorder hook only)
   const { startRecording: startLiveAudio, stopRecording: stopLiveAudio } = useAudioRecorder();
 
   // Translation Mode State
@@ -101,90 +105,65 @@ const RecordPage: React.FC = () => {
 
     try {
       setError(null);
-      setLiveTranscription("");
+      setLiveTranscription(""); // Clear global state
 
       const client = new MultimodalLiveClient(apiKey);
-      liveClientRef.current = client;
 
+      // Set up event handlers
       client.on('content', (text) => {
-        setLiveTranscription(prev => prev + text);
+        console.log('[Live Mode] Received content:', text);
+        appendLiveTranscription(text);
       });
 
       client.on('error', (err) => {
         console.error("Live Client Error:", err);
         setError("Live API Error: " + err.message);
-        stopLiveSession();
       });
 
       client.on('close', () => {
-        setIsLiveConnected(false);
+        console.log('[Live Mode] Connection closed');
       });
 
+      // Connect to Live API
       await client.connect({
-        model: "models/gemini-2.0-flash-exp",
-        systemInstruction: DERMATOLOGY_PROMPT + "\n\n" + "現在はLiveモードです。会話を聞き取り、リアルタイムで文字起こしを行ってください。ユーザーが「SOAP作成」または会話の終了を指示したら、指定されたJSON形式でSOAPノートを作成してください。",
+        model: "models/gemini-live-2.5-flash-preview",
+        generationConfig: {
+          responseModalities: ["TEXT"] as any, // Request text-only output
+        },
+        systemInstruction: LIVE_TRANSCRIPTION_PROMPT,
       });
 
-      setIsLiveConnected(true);
-      setIsRecording(true);
+      // Store client in global context
+      setLiveClient(client);
       setRecordingActive(true);
 
+      // Start audio streaming
       await startLiveAudio((base64) => {
         client.sendAudioChunk(base64);
+      });
+
+      // Navigate to ResultPage immediately
+      navigate('/result', {
+        state: {
+          isLiveMode: true,
+          patientInfo: { id: patientId, name: patientName },
+        }
       });
 
     } catch (err: any) {
       console.error("Failed to start Live Session:", err);
       setError("Failed to start Live Session: " + err.message);
-      setIsLiveConnected(false);
     }
   };
 
   const stopLiveSession = async () => {
     stopLiveAudio();
-    setIsRecording(false);
     setRecordingActive(false);
-    setIsProcessing(true);
 
-    if (liveClientRef.current) {
-      // Send command to generate SOAP
-      liveClientRef.current.sendText("Conversation finished. Please generate the SOAP note now based on the conversation history. Output ONLY the JSON.");
-
-      // Wait a bit for response (this is tricky with streaming, but let's assume the 'content' event will catch it)
-      // We might need a better way to handle the final response.
-      // For now, we'll watch the transcription update.
-
-      // Actually, we should probably accumulate the SOAP response separately or parse the buffer.
-      // Since we are appending to liveTranscription, the JSON will be appended there.
-    }
+    // Note: We don't stop the client here - ResultPage will handle that
   };
 
-  // Effect to parse JSON from liveTranscription when it looks like it's done
-  useEffect(() => {
-    if (isProcessing && liveTranscription.includes("```json")) {
-      // Try to extract and parse JSON
-      try {
-        const match = liveTranscription.match(/```json\s*([\s\S]*?)\s*```/);
-        if (match) {
-          const jsonStr = match[1];
-          const result = JSON.parse(jsonStr);
-          const patientInfo: PatientInfo = { id: patientId, name: patientName };
 
-          // Disconnect
-          if (liveClientRef.current) {
-            liveClientRef.current.disconnect();
-            liveClientRef.current = null;
-          }
-          setIsLiveConnected(false);
-          setIsProcessing(false);
-
-          navigate('/result', { state: { result, patientInfo } });
-        }
-      } catch (e) {
-        // Incomplete or invalid JSON, keep waiting
-      }
-    }
-  }, [liveTranscription, isProcessing, patientId, patientName, navigate]);
 
 
   // ----------------------------------------------------------------
@@ -577,6 +556,8 @@ const RecordPage: React.FC = () => {
       autoStartRef.current = true;
 
       if (navState.mode === AppMode.LIVE) {
+        // Ensure mode is set before starting
+        setMode(AppMode.LIVE);
         // Slight delay to ensure mode state is updated and UI is ready
         setTimeout(() => {
           startLiveSession();
@@ -611,7 +592,7 @@ const RecordPage: React.FC = () => {
         <div className={`h-3 w-3 rounded-full ${isRecording ? 'bg-rose-500 animate-pulse shadow-[0_0_0_6px_rgba(244,63,94,0.2)]' : 'bg-slate-300 shadow-inner'}`} />
         <div className="flex-1">
           <p className="text-sm font-semibold text-slate-800">
-            {isRecording ? '録音中 - 診察が終わったら停止してください' : '録音待機中 - 診察開始時に録音を押してください'}
+            {isRecording ? '録音中 - 診察が終わったら停止してください' : (mode === AppMode.LIVE ? 'Liveモード - 録音開始で即座に結果画面へ遷移します' : '録音待機中 - 診察開始時に録音を押してください')}
           </p>
           <p className="text-xs text-slate-500">
             {isRecording ? '停止するとSOAP生成に進みます' : '録音を開始するとこのバーが赤く変わります'}
@@ -619,7 +600,7 @@ const RecordPage: React.FC = () => {
         </div>
         {!isRecording && (
           <button
-            onClick={startMainRecording}
+            onClick={mode === AppMode.LIVE ? startLiveSession : startMainRecording}
             className="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-semibold shadow hover:bg-emerald-600"
           >
             録音開始
@@ -773,7 +754,7 @@ const RecordPage: React.FC = () => {
           <div className="p-4 bg-white border-t border-gray-200">
             {!isRecording && !showReviewModal ? (
               <button
-                onClick={startMainRecording}
+                onClick={mode === AppMode.LIVE ? startLiveSession : startMainRecording}
                 className="w-full py-4 bg-indigo-600 text-white rounded-lg font-bold shadow-lg hover:bg-indigo-700 transition flex items-center justify-center gap-2"
               >
                 <Mic size={20} />
@@ -825,52 +806,6 @@ const RecordPage: React.FC = () => {
             )}
           </div>
         </div>
-      ) : mode === AppMode.LIVE ? (
-        // Live Mode Layout
-        <div className="flex-1 flex flex-col bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden relative">
-          <div className="bg-rose-50 p-3 flex justify-between items-center border-b border-rose-100">
-            <div className="flex items-center gap-2 text-rose-800 font-bold text-sm">
-              <Volume2 size={16} />
-              Gemini Live (爆速SOAP生成モード)
-            </div>
-            <div className="text-xs text-rose-600 font-mono">
-              {isLiveConnected ? "● LIVE CONNECTED" : "○ DISCONNECTED"}
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gray-50 font-mono text-sm leading-relaxed">
-            {liveTranscription ? (
-              <div className="whitespace-pre-wrap text-gray-800">
-                {liveTranscription}
-              </div>
-            ) : (
-              <div className="text-center text-gray-400 mt-20">
-                <p>Gemini Live APIに接続して、リアルタイムに会話を解析します。</p>
-                <p className="text-xs mt-2">「録音開始」を押すと接続します。</p>
-              </div>
-            )}
-          </div>
-
-          <div className="p-4 bg-white border-t border-gray-200">
-            {!isRecording ? (
-              <button
-                onClick={startLiveSession}
-                className="w-full py-4 bg-rose-600 text-white rounded-lg font-bold shadow-lg hover:bg-rose-700 transition flex items-center justify-center gap-2"
-              >
-                <Mic size={20} />
-                Liveセッション開始
-              </button>
-            ) : (
-              <button
-                onClick={stopLiveSession}
-                className="w-full py-4 bg-gray-800 text-white rounded-lg font-bold shadow-lg hover:bg-gray-900 transition flex items-center justify-center gap-2"
-              >
-                <FileText size={20} />
-                終了してSOAP生成 (爆速)
-              </button>
-            )}
-          </div>
-        </div>
       ) : (
         // Standard Mode Layout (Simplified Big Button)
         <div className="flex-1 bg-white rounded-xl shadow-md border border-gray-200 p-8 flex flex-col items-center justify-center space-y-8">
@@ -883,7 +818,7 @@ const RecordPage: React.FC = () => {
             )}
 
             <button
-              onClick={isRecording ? handleStopRequest : startMainRecording}
+              onClick={mode === AppMode.LIVE ? startLiveSession : (isRecording ? handleStopRequest : startMainRecording)}
               className={`w-40 h-40 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl ${isRecording
                 ? 'bg-red-50 text-red-600 border-4 border-red-500 hover:bg-red-100 hover:scale-105'
                 : 'bg-teal-600 text-white hover:bg-teal-700 hover:shadow-teal-500/30 hover:scale-105'

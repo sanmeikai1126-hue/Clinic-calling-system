@@ -2,17 +2,24 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GeminiResponse, PatientInfo, MedicalRecord } from '../types';
 import { saveRecord } from '../services/storageService';
-import { Save, Copy, Check, ArrowLeft, FileDown } from 'lucide-react';
+import { Save, Copy, Check, ArrowLeft, FileDown, StopCircle } from 'lucide-react';
+import { useRecordingStatus } from '../contexts/RecordingContext';
+import { DERMATOLOGY_PROMPT } from '../services/geminiService';
 
 interface LocationState {
-  result: GeminiResponse;
+  result?: GeminiResponse;
   patientInfo: PatientInfo;
+  isLiveMode?: boolean;
 }
 
 const ResultPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const state = location.state as LocationState;
+  const { liveClient, liveTranscription, setLiveClient, setLiveTranscription } = useRecordingStatus();
+
+  // Determine if this is Live Mode
+  const isLiveMode = state?.isLiveMode || false;
 
   // Local state for editing
   const [transcription, setTranscription] = useState(state?.result?.transcription || []);
@@ -20,12 +27,56 @@ const ResultPage: React.FC = () => {
   const [patientInfo, setPatientInfo] = useState<PatientInfo>(state?.patientInfo || { id: '', name: '' });
   const [isSaved, setIsSaved] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [isGeneratingSOAP, setIsGeneratingSOAP] = useState(false);
+  const [parsedLiveTranscription, setParsedLiveTranscription] = useState<{ speaker: string, text: string }[]>([]);
 
   useEffect(() => {
     if (!state) {
       navigate('/');
     }
   }, [state, navigate]);
+
+  // Live Mode: Parse transcription by speaker
+  useEffect(() => {
+    if (isLiveMode && liveTranscription) {
+      // Parse 【医師】 and 【患者】 markers
+      const lines = liveTranscription.split('\n').filter(line => line.trim());
+      const parsed: { speaker: string, text: string }[] = [];
+
+      for (const line of lines) {
+        if (line.includes('【医師】')) {
+          parsed.push({ speaker: '医師', text: line.replace('【医師】', '').trim() });
+        } else if (line.includes('【患者】')) {
+          parsed.push({ speaker: '患者', text: line.replace('【患者】', '').trim() });
+        } else if (parsed.length > 0) {
+          // Continue previous speaker's text
+          parsed[parsed.length - 1].text += '\n' + line;
+        }
+      }
+
+      setParsedLiveTranscription(parsed);
+    }
+  }, [liveTranscription, isLiveMode]);
+
+  // Live Mode: Watch for SOAP JSON in transcription
+  useEffect(() => {
+    if (isLiveMode && liveTranscription && isGeneratingSOAP) {
+      // Check for JSON block
+      const jsonMatch = liveTranscription.match(/```json\s*([\s\S]*?)\s*```/);
+      if (jsonMatch) {
+        try {
+          const jsonStr = jsonMatch[1];
+          const result = JSON.parse(jsonStr);
+          if (result.soap) {
+            setSoap(result.soap);
+            setIsGeneratingSOAP(false);
+          }
+        } catch (e) {
+          console.log('[ResultPage] Still waiting for complete SOAP JSON...');
+        }
+      }
+    }
+  }, [liveTranscription, isLiveMode, isGeneratingSOAP]);
 
   if (!state) return null;
 
@@ -90,6 +141,25 @@ const ResultPage: React.FC = () => {
     setTranscription(newItems);
   };
 
+  const handleStopAndGenerateSOAP = async () => {
+    if (!liveClient) return;
+    setIsGeneratingSOAP(true);
+
+    // Send full DERMATOLOGY_PROMPT with conversation history to generate SOAP
+    const soapGenerationPrompt = `
+${DERMATOLOGY_PROMPT}
+
+**これまでの会話内容**:
+${liveTranscription}
+
+**指示**:
+上記の会話内容に基づいて、SOAPノートを作成してください。
+出力は指定されたJSON形式のみで、他のテキストは一切含めないでください。
+`;
+
+    liveClient.sendText(soapGenerationPrompt);
+  };
+
   return (
     <div className="max-w-6xl mx-auto w-full h-[calc(100vh-120px)] bg-white/95 backdrop-blur border border-slate-200 rounded-2xl shadow-xl overflow-hidden flex flex-col">
       {/* Toolbar */}
@@ -99,7 +169,9 @@ const ResultPage: React.FC = () => {
             <ArrowLeft size={20} />
           </button>
           <div>
-            <h2 className="text-lg font-bold text-gray-800 mb-1">結果確認・編集</h2>
+            <h2 className="text-lg font-bold text-gray-800 mb-1">
+              {isLiveMode ? "Gemini Live (爆速) - リアルタイム文字起こし" : "結果確認・編集"}
+            </h2>
             <div className="flex gap-2 items-center">
               <input
                 type="text"
@@ -115,15 +187,35 @@ const ResultPage: React.FC = () => {
                 placeholder="ID"
                 className="text-xs px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-teal-500 focus:border-teal-500 w-24"
               />
-              {state.result.usedModel && (
+              {state.result?.usedModel && (
                 <span className="text-xs px-2 py-1 bg-blue-50 text-blue-700 rounded border border-blue-200">
                   {state.result.usedModel}
+                </span>
+              )}
+              {isLiveMode && (
+                <span className="text-xs px-2 py-1 bg-rose-50 text-rose-700 rounded border border-rose-200 font-mono">
+                  ● LIVE
                 </span>
               )}
             </div>
           </div>
         </div>
         <div className="flex gap-3">
+          {isLiveMode && liveClient && !isGeneratingSOAP && (
+            <button
+              onClick={handleStopAndGenerateSOAP}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-rose-600 rounded-md hover:bg-rose-700 transition shadow-sm"
+            >
+              <StopCircle size={16} />
+              終了してSOAP生成
+            </button>
+          )}
+          {isGeneratingSOAP && (
+            <div className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-md">
+              <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
+              SOAP生成中...
+            </div>
+          )}
           <button
             onClick={handleDownloadTxt}
             className="hidden md:flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-600 bg-gray-100 rounded-md hover:bg-gray-200 transition"
@@ -158,21 +250,50 @@ const ResultPage: React.FC = () => {
         <div className="w-full md:w-1/2 flex flex-col border-r border-slate-200 bg-slate-50/80">
           <div className="p-3 bg-slate-100 border-b border-slate-200 text-sm font-semibold text-slate-700 uppercase tracking-wider">
             文字起こし (Transcript)
+            {isLiveMode && (
+              <span className="text-xs text-rose-600 ml-2 normal-case">● リアルタイム更新中</span>
+            )}
           </div>
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {transcription.map((item, idx) => (
-              <div key={idx} className="flex flex-col gap-1">
-                <span className={`text-xs font-bold ${item.speaker === '医師' ? 'text-teal-700' : 'text-orange-700'}`}>
-                  [{item.speaker}]
-                </span>
-                <textarea
-                  value={item.text}
-                  onChange={(e) => handleTranscriptChange(idx, e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-200 rounded text-sm text-gray-700 focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
-                  rows={Math.max(2, Math.ceil(item.text.length / 40))}
-                />
-              </div>
-            ))}
+            {isLiveMode ? (
+              parsedLiveTranscription.length > 0 ? (
+                parsedLiveTranscription.map((item, idx) => (
+                  <div key={idx} className="flex flex-col gap-1">
+                    <span className={`text-xs font-bold ${item.speaker === '医師' ? 'text-teal-700' : 'text-orange-700'}`}>
+                      [{item.speaker}]
+                    </span>
+                    <textarea
+                      value={item.text}
+                      onChange={(e) => {
+                        const newParsed = [...parsedLiveTranscription];
+                        newParsed[idx].text = e.target.value;
+                        setParsedLiveTranscription(newParsed);
+                      }}
+                      className="w-full p-2 bg-white border border-gray-200 rounded text-sm text-gray-700 focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                      rows={Math.max(2, Math.ceil(item.text.length / 40))}
+                    />
+                  </div>
+                ))
+              ) : (
+                <div className="text-center text-gray-400 mt-8">
+                  会話を待機中...
+                </div>
+              )
+            ) : (
+              transcription.map((item, idx) => (
+                <div key={idx} className="flex flex-col gap-1">
+                  <span className={`text-xs font-bold ${item.speaker === '医師' ? 'text-teal-700' : 'text-orange-700'}`}>
+                    [{item.speaker}]
+                  </span>
+                  <textarea
+                    value={item.text}
+                    onChange={(e) => handleTranscriptChange(idx, e.target.value)}
+                    className="w-full p-2 bg-white border border-gray-200 rounded text-sm text-gray-700 focus:ring-1 focus:ring-teal-500 focus:border-teal-500"
+                    rows={Math.max(2, Math.ceil(item.text.length / 40))}
+                  />
+                </div>
+              ))
+            )}
           </div>
         </div>
 
