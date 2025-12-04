@@ -58,21 +58,41 @@ const ResultPage: React.FC = () => {
     }
   }, [liveTranscription, isLiveMode]);
 
-  // Live Mode: Watch for SOAP JSON in transcription
+  // Live Mode: Watch for SOAP JSON in transcription (only when generating)
   useEffect(() => {
     if (isLiveMode && liveTranscription && isGeneratingSOAP) {
+      console.log('[ResultPage] Checking for SOAP JSON, isGeneratingSOAP:', isGeneratingSOAP);
+      // Remove speaker tags and look for JSON
+      const cleanedText = liveTranscription.replace(/【医師】|【患者】/g, '');
+
       // Check for JSON block
-      const jsonMatch = liveTranscription.match(/```json\s*([\s\S]*?)\s*```/);
+      const jsonMatch = cleanedText.match(/```json\s*([\s\S]*?)\s*```/);
       if (jsonMatch) {
         try {
-          const jsonStr = jsonMatch[1];
+          const jsonStr = jsonMatch[1].trim();
+          console.log('[ResultPage] Found JSON string:', jsonStr.substring(0, 100));
           const result = JSON.parse(jsonStr);
+
+          // Handle both nested {soap: {...}} and flat {S:..., O:..., A:..., P:...}
+          let soapData;
           if (result.soap) {
-            setSoap(result.soap);
+            soapData = result.soap;
+          } else if (result.S || result.s) {
+            soapData = {
+              s: result.S || result.s || '',
+              o: result.O || result.o || '',
+              a: result.A || result.a || '',
+              p: result.P || result.p || ''
+            };
+          }
+
+          if (soapData) {
+            console.log('[ResultPage] Parsed SOAP data:', soapData);
+            setSoap(soapData);
             setIsGeneratingSOAP(false);
           }
         } catch (e) {
-          console.log('[ResultPage] Still waiting for complete SOAP JSON...');
+          console.log('[ResultPage] JSON parse error:', e);
         }
       }
     }
@@ -108,27 +128,48 @@ const ResultPage: React.FC = () => {
     const dateStr = new Date().toLocaleDateString('ja-JP').replace(/\//g, '-');
     const filename = `medical_record_${patientInfo.id || 'no_id'}_${dateStr}.txt`;
 
-    const content = [
-      "【診療記録】",
-      `日時: ${new Date().toLocaleString('ja-JP')}`,
-      `患者ID: ${patientInfo.id}`,
-      `氏名: ${patientInfo.name}`,
-      "",
-      "【SOAP】",
-      `(S) ${soap.s}`,
-      `(O) ${soap.o}`,
-      `(A) ${soap.a}`,
-      `(P) ${soap.p}`,
-      "",
-      "【文字起こし】",
-      ...transcription.map(t => `[${t.speaker}] ${t.text}`)
-    ].join('\n');
+    let transcriptContent;
 
-    const blob = new Blob([content], { type: 'text/plain' });
+    if (isLiveMode) {
+      // Parse Live mode transcription
+      const lines = liveTranscription.split('\n').filter(line => line.trim());
+      const parsed: { speaker: string, text: string }[] = [];
+
+      for (const line of lines) {
+        if (line.includes('【医師】')) {
+          parsed.push({ speaker: '医師', text: line.replace('【医師】', '').trim() });
+        } else if (line.includes('【患者】')) {
+          parsed.push({ speaker: '患者', text: line.replace('【患者】', '').trim() });
+        } else if (parsed.length > 0) {
+          parsed[parsed.length - 1].text += '\n' + line;
+        }
+      }
+
+      transcriptContent = parsed.map(item => `[${item.speaker}]\n${item.text}`).join('\n\n');
+    } else {
+      transcriptContent = transcription.map(item => `[${item.speaker}]\n${item.text}`).join('\n\n');
+    }
+
+    const content = `【診療記録】
+日時: ${new Date().toLocaleString('ja-JP')}
+患者ID: ${patientInfo.id}
+氏名: ${patientInfo.name}
+
+【SOAP】
+(S) ${soap.s}
+(O) ${soap.o}
+(A) ${soap.a}
+(P) ${soap.p}
+
+【文字起こし】
+${transcriptContent}
+    `;
+
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = filename;
+    a.download = `診療記録_${new Date().toISOString().slice(0, 10)}.txt`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
