@@ -48,8 +48,9 @@ export interface MedicalRecord {
 }
 
 export enum AppMode {
-  STANDARD = 'STANDARD',
-  TRANSLATE = 'TRANSLATE',
+  STANDARD = 'standard',
+  TRANSLATE = 'translate',
+  LIVE = 'live'
 }
 
 export enum ChatRole {

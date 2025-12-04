@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Division, LogEntry, AIProvider } from '../types';
+import { Division, LogEntry, AIProvider, AppMode } from '../types';
 import { useAudioPlayer } from '../hooks/useAudioPlayer';
 import { useLocalStorage } from '../hooks/useLocalStorage';
 import { Numpad } from '../components/Numpad';
@@ -26,6 +26,7 @@ export default function CallingPage() {
     const [announcement, setAnnouncement] = useState<string | null>(null);
     const navigate = useNavigate();
     const { selectedProvider, setSelectedProvider } = useRecordingStatus();
+    const [isLiveMode, setIsLiveMode] = useState(false);
 
     const [history, setHistory] = useLocalStorage<string[]>('clinic-call-history', []);
     const [, setLogs] = useLocalStorage<LogEntry[]>('clinic-call-logs', []);
@@ -101,7 +102,13 @@ export default function CallingPage() {
 
         if (division === Division.Exam) {
             setTimeout(() => {
-                navigate('/record', { state: { autoStart: true, fromCall: true } });
+                navigate('/record', {
+                    state: {
+                        autoStart: true,
+                        fromCall: true,
+                        mode: isLiveMode ? AppMode.LIVE : AppMode.STANDARD
+                    }
+                });
             }, 400);
         }
         setNumber('');
@@ -203,23 +210,36 @@ export default function CallingPage() {
                     <span className="text-sm text-slate-500">F1〜F4キー対応</span>
                 </header>
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-inner">
-                    <div className="text-sm font-semibold text-slate-700">録音モデル</div>
-                    <div className="flex gap-2">
-                        {[AIProvider.OPENAI, AIProvider.GEMINI].map((p) => (
-                            <button
-                                key={p}
-                                onClick={() => setSelectedProvider(p)}
-                                className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition shadow-sm ${
-                                    selectedProvider === p
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-inner">
+                    <div className="flex items-center gap-4">
+                        <div className="text-sm font-semibold text-slate-700">録音モデル</div>
+                        <div className="flex gap-2">
+                            {[AIProvider.OPENAI, AIProvider.GEMINI].map((p) => (
+                                <button
+                                    key={p}
+                                    onClick={() => setSelectedProvider(p)}
+                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition shadow-sm ${selectedProvider === p
                                         ? 'bg-teal-600 text-white border-teal-600 shadow-[0_8px_18px_rgba(13,148,136,0.2)]'
                                         : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                                }`}
-                            >
-                                {p === AIProvider.OPENAI ? 'OpenAI (推奨)' : 'Gemini'}
-                            </button>
-                        ))}
+                                        }`}
+                                >
+                                    {p === AIProvider.OPENAI ? 'OpenAI (推奨)' : 'Gemini'}
+                                </button>
+                            ))}
+                        </div>
                     </div>
+
+                    <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition">
+                        <input
+                            type="checkbox"
+                            checked={isLiveMode}
+                            onChange={(e) => setIsLiveMode(e.target.checked)}
+                            className="w-4 h-4 text-rose-600 rounded focus:ring-rose-500 border-gray-300"
+                        />
+                        <span className={`text-xs font-bold ${isLiveMode ? 'text-rose-600' : 'text-slate-600'}`}>
+                            Liveモード (爆速)
+                        </span>
+                    </label>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
@@ -287,6 +307,6 @@ export default function CallingPage() {
                 )}
 
             </div>
-        </div>
+        </div >
     );
 }
