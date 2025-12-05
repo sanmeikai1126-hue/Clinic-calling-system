@@ -137,9 +137,6 @@ const transcribeWithOpenAI = async (audioFile: File, apiKey: string): Promise<st
 const generateOpenAI = async (transcript: string, apiKey: string, model: string = DEFAULT_OPENAI_MODEL): Promise<GeminiResponse> => {
     const openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
 
-    console.log("[OpenAI] Sending transcript to GPT for SOAP generation...");
-    console.log("[OpenAI] Transcript length:", transcript.length, "chars");
-
     const completion = await openai.chat.completions.create({
         model: model,
         messages: [
@@ -150,12 +147,9 @@ const generateOpenAI = async (transcript: string, apiKey: string, model: string 
     });
 
     const content = completion.choices[0].message.content;
-    console.log("[OpenAI] Raw response:", content);
-
     if (!content) throw new Error("No content from OpenAI");
 
     const result = JSON.parse(content);
-    console.log("[OpenAI] Parsed result keys:", Object.keys(result));
 
     // Handle both lowercase (s, o, a, p) and uppercase (S, O, A, P) keys
     // Also handle case where SOAP is at root level vs nested in 'soap' object
@@ -166,8 +160,6 @@ const generateOpenAI = async (transcript: string, apiKey: string, model: string 
         a: soapData.a || soapData.A || '',
         p: soapData.p || soapData.P || ''
     };
-
-    console.log("[OpenAI] Extracted SOAP:", soap);
 
     // Handle transcription: OpenAI may return string instead of array, 
     // or array with different key names (utterance vs text)
@@ -196,8 +188,6 @@ const generateOpenAI = async (transcript: string, apiKey: string, model: string 
             return { speaker: '医師', text: line.trim() };
         });
     }
-
-    console.log("[OpenAI] Transcription array length:", transcriptionArray.length);
 
     // Ensure structure matches GeminiResponse
     return {
