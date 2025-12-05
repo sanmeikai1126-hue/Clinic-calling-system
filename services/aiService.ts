@@ -137,6 +137,9 @@ const transcribeWithOpenAI = async (audioFile: File, apiKey: string): Promise<st
 const generateOpenAI = async (transcript: string, apiKey: string, model: string = DEFAULT_OPENAI_MODEL): Promise<GeminiResponse> => {
     const openai = new OpenAI({ apiKey, dangerouslyAllowBrowser: true });
 
+    console.log("[OpenAI] Sending transcript to GPT for SOAP generation...");
+    console.log("[OpenAI] Transcript length:", transcript.length, "chars");
+
     const completion = await openai.chat.completions.create({
         model: model,
         messages: [
@@ -147,14 +150,60 @@ const generateOpenAI = async (transcript: string, apiKey: string, model: string 
     });
 
     const content = completion.choices[0].message.content;
+    console.log("[OpenAI] Raw response:", content);
+
     if (!content) throw new Error("No content from OpenAI");
 
     const result = JSON.parse(content);
+    console.log("[OpenAI] Parsed result keys:", Object.keys(result));
+
+    // Handle both lowercase (s, o, a, p) and uppercase (S, O, A, P) keys
+    // Also handle case where SOAP is at root level vs nested in 'soap' object
+    const soapData = result.soap || result.SOAP || result;
+    const soap = {
+        s: soapData.s || soapData.S || '',
+        o: soapData.o || soapData.O || '',
+        a: soapData.a || soapData.A || '',
+        p: soapData.p || soapData.P || ''
+    };
+
+    console.log("[OpenAI] Extracted SOAP:", soap);
+
+    // Handle transcription: OpenAI may return string instead of array, 
+    // or array with different key names (utterance vs text)
+    let transcriptionArray: { speaker: string; text: string }[] = [];
+
+    if (Array.isArray(result.transcription)) {
+        // Normalize array items: handle both 'text' and 'utterance' keys
+        transcriptionArray = result.transcription.map((item: any) => ({
+            speaker: item.speaker || '医師',
+            text: item.text || item.utterance || item.content || ''
+        }));
+    } else if (typeof result.transcription === 'string') {
+        // Parse string format: "医師: text\n患者: text\n..."
+        const lines = result.transcription.split('\n').filter((line: string) => line.trim());
+        transcriptionArray = lines.map((line: string) => {
+            // Match patterns like "医師:" or "患者:" at the start
+            const match = line.match(/^(医師|患者|ドクター|Doctor|Patient)[：:]\s*/i);
+            if (match) {
+                const speaker = match[1].toLowerCase().includes('doctor') || match[1] === '医師' || match[1] === 'ドクター'
+                    ? '医師'
+                    : '患者';
+                const text = line.substring(match[0].length).trim();
+                return { speaker, text };
+            }
+            // Default to previous speaker or '医師'
+            return { speaker: '医師', text: line.trim() };
+        });
+    }
+
+    console.log("[OpenAI] Transcription array length:", transcriptionArray.length);
+
     // Ensure structure matches GeminiResponse
     return {
         language: result.language || 'ja-JP',
-        transcription: result.transcription || [],
-        soap: result.soap || { s: '', o: '', a: '', p: '' },
+        transcription: transcriptionArray,
+        soap: soap,
         usedModel: model
     };
 };
