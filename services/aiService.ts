@@ -233,8 +233,11 @@ export const generateClinicalNote = async (
 
     // Transcribe
     console.log("Transcribing with OpenAI Whisper...");
-    const transcript = await transcribeWithOpenAI(audioFile, openaiKey);
+    let transcript = await transcribeWithOpenAI(audioFile, openaiKey);
     console.log("Transcription complete:", transcript.substring(0, 50) + "...");
+
+    // Clean up Whisper output: remove speaker labels like 【佐藤】
+    transcript = transcript.replace(/【[^】]+】/g, '').trim();
 
     // Dispatch to LLM
     const targetKey = apiKeys[provider];
