@@ -46,14 +46,23 @@ const RecordPage: React.FC = () => {
   const location = useLocation();
   const { apiKeys } = useApiKey();
   const {
+    isRecordingActive,
     setRecordingActive,
     selectedProvider,
     setSelectedProvider,
     setLiveClient,
+    startLiveRecording,
     setLiveTranscription,
     appendLiveTranscription
   } = useRecordingStatus();
 
+  // Local state for standard recording (non-Live)
+  const {
+    isRecording: isStandardRecording,
+    startRecording: startStandardRecording,
+    stopRecording: stopStandardRecording,
+    error: audioError
+  } = useAudioRecorder();
   // State
   const [patientId, setPatientId] = useState('');
   const [patientName, setPatientName] = useState('');
@@ -135,10 +144,9 @@ const RecordPage: React.FC = () => {
 
       // Store client in global context
       setLiveClient(client);
-      setRecordingActive(true);
 
-      // Start audio streaming
-      await startLiveAudio((base64) => {
+      // Start audio streaming using Context (persists across navigation)
+      await startLiveRecording((base64) => {
         client.sendAudioChunk(base64);
       });
 
@@ -157,10 +165,8 @@ const RecordPage: React.FC = () => {
   };
 
   const stopLiveSession = async () => {
-    stopLiveAudio();
-    setRecordingActive(false);
-
-    // Note: We don't stop the client here - ResultPage will handle that
+    // This might not be called if we navigate away, but good for cleanup
+    // stopLiveRecording is now handled in ResultPage or Context
   };
 
 

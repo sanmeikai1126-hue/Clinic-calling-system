@@ -7,29 +7,30 @@ export interface AudioRecorderHook {
     error: string | null;
 }
 
-export const useAudioRecorder = (): AudioRecorderHook => {
+export const useAudioRecorder = (): AudioRecorderHook & { getAudioBlob: () => Promise<Blob | null> } => {
     const [isRecording, setIsRecording] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const audioContextRef = useRef<AudioContext | null>(null);
     const processorRef = useRef<ScriptProcessorNode | null>(null);
     const streamRef = useRef<MediaStream | null>(null);
     const inputRef = useRef<MediaStreamAudioSourceNode | null>(null);
+    const audioChunksRef = useRef<Int16Array[]>([]);
 
     const startRecording = useCallback(async (onData: (base64: string) => void) => {
         try {
             setError(null);
+            audioChunksRef.current = []; // Reset chunks
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
             streamRef.current = stream;
 
             const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-                sampleRate: 16000, // Try to request 16kHz directly
+                sampleRate: 16000,
             });
             audioContextRef.current = audioContext;
 
             const source = audioContext.createMediaStreamSource(stream);
             inputRef.current = source;
 
-            // Buffer size 4096 is a good balance between latency and performance
             const processor = audioContext.createScriptProcessor(4096, 1, 1);
             processorRef.current = processor;
 
@@ -41,19 +42,12 @@ export const useAudioRecorder = (): AudioRecorderHook => {
                 let pcmData: Int16Array;
 
                 if (inputSampleRate === targetSampleRate) {
-                    // No resampling needed
                     pcmData = new Int16Array(inputData.length);
                     for (let i = 0; i < inputData.length; i++) {
                         const s = Math.max(-1, Math.min(1, inputData[i]));
                         pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                     }
                 } else {
-                    // Simple downsampling (decimation)
-                    // Note: This is a naive implementation. For better quality, use a proper resampling library or AudioWorklet.
-                    // But for speech recognition, this might be "good enough" if the ratio is simple.
-                    // A better approach is to use OfflineAudioContext for resampling, but that's not real-time.
-                    // Let's try a simple linear interpolation or just skipping samples.
-
                     const ratio = inputSampleRate / targetSampleRate;
                     const newLength = Math.floor(inputData.length / ratio);
                     pcmData = new Int16Array(newLength);
@@ -64,18 +58,20 @@ export const useAudioRecorder = (): AudioRecorderHook => {
                         const nextIndex = Math.min(index + 1, inputData.length - 1);
                         const weight = offset - index;
 
-                        // Linear interpolation
                         const val = inputData[index] * (1 - weight) + inputData[nextIndex] * weight;
                         const s = Math.max(-1, Math.min(1, val));
                         pcmData[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
                     }
                 }
 
-                // Convert to Base64
+                // Store PCM data for Blob creation
+                audioChunksRef.current.push(pcmData);
+
+                // Convert to Base64 for Live API
                 const buffer = new ArrayBuffer(pcmData.length * 2);
                 const view = new DataView(buffer);
                 for (let i = 0; i < pcmData.length; i++) {
-                    view.setInt16(i * 2, pcmData[i], true); // Little endian
+                    view.setInt16(i * 2, pcmData[i], true);
                 }
 
                 const base64 = btoa(
@@ -116,10 +112,52 @@ export const useAudioRecorder = (): AudioRecorderHook => {
         inputRef.current = null;
     }, []);
 
+    const getAudioBlob = useCallback(async (): Promise<Blob | null> => {
+        if (audioChunksRef.current.length === 0) return null;
+
+        // Calculate total length
+        const totalLength = audioChunksRef.current.reduce((acc, chunk) => acc + chunk.length, 0);
+        const wavBuffer = new ArrayBuffer(44 + totalLength * 2);
+        const view = new DataView(wavBuffer);
+
+        // WAV Header
+        const writeString = (view: DataView, offset: number, string: string) => {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        };
+
+        writeString(view, 0, 'RIFF');
+        view.setUint32(4, 36 + totalLength * 2, true);
+        writeString(view, 8, 'WAVE');
+        writeString(view, 12, 'fmt ');
+        view.setUint32(16, 16, true);
+        view.setUint16(20, 1, true); // PCM
+        view.setUint16(22, 1, true); // Mono
+        view.setUint32(24, 16000, true); // Sample Rate
+        view.setUint32(28, 16000 * 2, true); // Byte Rate
+        view.setUint16(32, 2, true); // Block Align
+        view.setUint16(34, 16, true); // Bits per Sample
+        writeString(view, 36, 'data');
+        view.setUint32(40, totalLength * 2, true);
+
+        // Write PCM data
+        let offset = 44;
+        for (const chunk of audioChunksRef.current) {
+            for (let i = 0; i < chunk.length; i++) {
+                view.setInt16(offset, chunk[i], true);
+                offset += 2;
+            }
+        }
+
+        return new Blob([wavBuffer], { type: 'audio/wav' });
+    }, []);
+
     return {
         isRecording,
         startRecording,
         stopRecording,
+        getAudioBlob,
         error
     };
 };

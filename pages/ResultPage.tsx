@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GeminiResponse, PatientInfo, MedicalRecord } from '../types';
 import { saveRecord } from '../services/storageService';
-import { Save, Copy, Check, ArrowLeft, FileDown, StopCircle } from 'lucide-react';
+import { Save, Copy, Check, ArrowLeft, FileDown, StopCircle, Download } from 'lucide-react';
 import { useRecordingStatus } from '../contexts/RecordingContext';
 import { DERMATOLOGY_PROMPT } from '../services/geminiService';
 
@@ -21,7 +21,8 @@ const ResultPage: React.FC = () => {
     setLiveClient,
     liveTranscription,
     appendLiveTranscription,
-    audioBlob
+    audioBlob,
+    stopLiveRecording
   } = useRecordingStatus();
 
   // Determine if this is Live Mode
@@ -81,25 +82,21 @@ const ResultPage: React.FC = () => {
           const jsonStr = jsonMatch[1].trim();
           console.log('[ResultPage] Found JSON string:', jsonStr.substring(0, 100));
           const result = JSON.parse(jsonStr);
+          console.log('[ResultPage] Parsed SOAP JSON:', result);
 
-          // Handle both nested {soap: {...}} and flat {S:..., O:..., A:..., P:...}
-          let soapData;
-          if (result.soap) {
-            soapData = result.soap;
-          } else if (result.S || result.s) {
-            soapData = {
-              s: result.S || result.s || '',
-              o: result.O || result.o || '',
-              a: result.A || result.a || '',
-              p: result.P || result.p || ''
-            };
-          }
+          setSoap({
+            s: result.S || result.s || '',
+            o: result.O || result.o || '',
+            a: result.A || result.a || '',
+            p: result.P || result.p || ''
+          });
+          setIsGeneratingSOAP(false);
 
-          if (soapData) {
-            console.log('[ResultPage] Parsed SOAP data:', soapData);
-            setSoap(soapData);
-            console.log('[ResultPage] Called setSoap with:', soapData);
-            setIsGeneratingSOAP(false);
+          // Disconnect client after SOAP is generated
+          if (liveClient) {
+            console.log('[ResultPage] SOAP generated, disconnecting client');
+            liveClient.disconnect();
+            setLiveClient(null);
           }
         } catch (e) {
           console.log('[ResultPage] JSON parse error:', e);
@@ -235,7 +232,8 @@ JSON以外のテキスト、説明、コメントは絶対に出力しないで�
 
     liveClient.sendText(soapGenerationPrompt);
 
-    // Auto-stop Live session after SOAP generation (will stop when SOAP is parsed)
+    // Stop audio recording immediately so no more transcription is added
+    await stopLiveRecording();
   };
 
   const handleDownloadAudio = () => {
@@ -309,6 +307,17 @@ JSON以外のテキスト、説明、コメントは絶対に出力しないで�
               <div className="animate-spin h-4 w-4 border-2 border-gray-400 border-t-transparent rounded-full"></div>
               SOAP生成中...
             </div>
+          )}
+          {/* Audio Download Button (Live Mode Only) */}
+          {isLiveMode && audioBlob && (
+            <button
+              onClick={handleDownloadAudio}
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium"
+              title="録音データをダウンロード"
+            >
+              <Download size={16} />
+              音声保存
+            </button>
           )}
           <button
             onClick={handleDownloadTxt}
