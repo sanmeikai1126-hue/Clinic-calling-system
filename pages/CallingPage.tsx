@@ -86,7 +86,19 @@ export default function CallingPage() {
         setAnnouncement(newAnnouncement);
         setLastCall({ number, division });
 
-        audio.play(audioSrc);
+        const onPlayEnded = () => {
+            if (division === Division.Exam) {
+                navigate('/record', {
+                    state: {
+                        autoStart: true,
+                        fromCall: true,
+                        mode: isLiveMode ? AppMode.LIVE : AppMode.STANDARD
+                    }
+                });
+            }
+        };
+
+        audio.play(audioSrc, onPlayEnded);
 
         addLog({
             number: number,
@@ -99,18 +111,6 @@ export default function CallingPage() {
             const newHistory = [number, ...prev.filter(n => n !== number)];
             return newHistory.slice(0, MAX_HISTORY);
         });
-
-        if (division === Division.Exam) {
-            setTimeout(() => {
-                navigate('/record', {
-                    state: {
-                        autoStart: true,
-                        fromCall: true,
-                        mode: isLiveMode ? AppMode.LIVE : AppMode.STANDARD
-                    }
-                });
-            }, 400);
-        }
         setNumber('');
     }, [number, audio, addLog, setHistory, navigate]);
 
