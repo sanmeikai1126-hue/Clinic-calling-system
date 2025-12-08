@@ -25,7 +25,7 @@ const RecordingContext = createContext<RecordingContextValue | undefined>(undefi
 
 export const RecordingProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isRecordingActive, setRecordingActive] = useState(false);
-  const [selectedProvider, setSelectedProvider] = useState<AIProvider>(AIProvider.OPENAI);
+  const [selectedProvider, setSelectedProvider] = useState<AIProvider>(AIProvider.GEMINI);
   const [liveClient, setLiveClient] = useState<MultimodalLiveClient | null>(null);
   const [liveTranscription, setLiveTranscription] = useState<string>('');
   const [audioBlob, setAudioBlob] = useState<Blob | null>(null);

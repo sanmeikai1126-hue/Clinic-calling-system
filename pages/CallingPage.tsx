@@ -26,7 +26,7 @@ export default function CallingPage() {
     const [announcement, setAnnouncement] = useState<string | null>(null);
     const navigate = useNavigate();
     const { selectedProvider, setSelectedProvider } = useRecordingStatus();
-    const [isLiveMode, setIsLiveMode] = useState(false);
+    const [isLiveMode, setIsLiveMode] = useState(true);
 
     const [history, setHistory] = useLocalStorage<string[]>('clinic-call-history', []);
     const [, setLogs] = useLocalStorage<LogEntry[]>('clinic-call-logs', []);

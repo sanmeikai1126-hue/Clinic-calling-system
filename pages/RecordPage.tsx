@@ -69,7 +69,7 @@ const RecordPage: React.FC = () => {
   const [provider, setProvider] = useState<AIProvider>(selectedProvider);
   const [isRecording, setIsRecording] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [mode, setMode] = useState<AppMode>(AppMode.STANDARD);
+  const [mode, setMode] = useState<AppMode>(AppMode.LIVE);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showReviewModal, setShowReviewModal] = useState(false);
