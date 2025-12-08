@@ -4,7 +4,9 @@ import { GeminiResponse, PatientInfo, MedicalRecord } from '../types';
 import { saveRecord } from '../services/storageService';
 import { Save, Copy, Check, ArrowLeft, FileDown, StopCircle, Download } from 'lucide-react';
 import { useRecordingStatus } from '../contexts/RecordingContext';
-import { DERMATOLOGY_PROMPT } from '../services/geminiService';
+import { DERMATOLOGY_PROMPT, generateClinicalNoteFromText } from '../services/geminiService';
+import { useApiKey } from '../contexts/ApiKeyContext';
+import { AIProvider } from '../types';
 
 interface LocationState {
   result?: GeminiResponse;
@@ -24,6 +26,7 @@ const ResultPage: React.FC = () => {
     audioBlob,
     stopLiveRecording
   } = useRecordingStatus();
+  const { apiKeys } = useApiKey();
 
   // Determine if this is Live Mode
   const isLiveMode = state?.isLiveMode || false;
@@ -104,6 +107,54 @@ const ResultPage: React.FC = () => {
       }
     }
   }, [liveTranscription, isLiveMode, isGeneratingSOAP]);
+
+  // Live Mode: Handle connection close/error during SOAP generation (Fallback)
+  useEffect(() => {
+    if (liveClient && isGeneratingSOAP) {
+      const handleDisconnect = async () => {
+        console.warn('[ResultPage] Live client disconnected/error while generating SOAP. Attempting fallback...');
+
+        try {
+          // Fallback: Generate SOAP from the transcript we have collected so far
+          const apiKey = apiKeys[AIProvider.GEMINI];
+          if (!apiKey) throw new Error("No API Key available for fallback");
+
+          const textToProcess = liveTranscription || "（会話内容は空です）";
+
+          const fallbackResult = await generateClinicalNoteFromText(textToProcess, apiKey);
+
+          setSoap({
+            s: fallbackResult.soap.s,
+            o: fallbackResult.soap.o,
+            a: fallbackResult.soap.a,
+            p: fallbackResult.soap.p
+          });
+
+          if (fallbackResult.transcription && fallbackResult.transcription.length > 0) {
+            // Optional: Merge or replace transcription if fallback provides a better one
+            // setTranscription(fallbackResult.transcription);
+          }
+
+          setIsGeneratingSOAP(false);
+          setLiveClient(null);
+          // alert("通信が切断されたため、標準モードでSOAPを再生成しました。");
+
+        } catch (e: any) {
+          console.error("Fallback generation failed:", e);
+          setIsGeneratingSOAP(false);
+          alert(`SOAP生成に失敗しました: ${e.message}`);
+        }
+      };
+
+      liveClient.on('close', handleDisconnect);
+      liveClient.on('error', handleDisconnect);
+
+      return () => {
+        liveClient.off('close', handleDisconnect);
+        liveClient.off('error', handleDisconnect);
+      };
+    }
+  }, [liveClient, isGeneratingSOAP, liveTranscription, apiKeys]);
 
   // Debug: Log soap state changes
   useEffect(() => {
@@ -206,14 +257,12 @@ ${transcriptContent}
     setIsGeneratingSOAP(true);
 
     // Send SOAP generation request with strict JSON format requirement
+    // Optimize: Do NOT send the full transcript again. The model has context.
     const soapGenerationPrompt = `
 ${DERMATOLOGY_PROMPT}
 
-**これまでの会話内容**:
-${liveTranscription}
-
-**重要な指示**:
-上記の会話内容に基づいてSOAPノートを作成してください。
+**指示**:
+これまでの会話内容に基づいてSOAPノートを作成してください。
 
 **出力形式（厳守）**:
 必ず以下のJSON形式のみで出力してください。他のテキストは一切含めないでください。

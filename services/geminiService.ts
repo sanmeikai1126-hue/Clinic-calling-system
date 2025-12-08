@@ -344,6 +344,66 @@ export const generateClinicalNote = async (
   throw lastError || new Error("All models failed");
 };
 
+export const generateClinicalNoteFromText = async (
+  transcriptText: string,
+  apiKey: string
+): Promise<GeminiResponse> => {
+  if (!apiKey) {
+    throw new Error("API Key is missing.");
+  }
+
+  const ai = new GoogleGenAI({ apiKey });
+  const finalSystemPrompt = SYSTEM_PROMPT_BASE;
+
+  // Use the fastest capable model for text processing
+  const model = 'gemini-2.5-flash';
+
+  try {
+    const response = await retryWithBackoff(async () => {
+      return await ai.models.generateContent({
+        model: model,
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: `
+Based on the following conversation transcript, generate a dermatology SOAP note following the system instructions.
+
+Transcription:
+${transcriptText}
+`
+              }
+            ]
+          }
+        ],
+        config: {
+          systemInstruction: finalSystemPrompt,
+          responseMimeType: "application/json",
+          responseSchema: RESPONSE_SCHEMA,
+          temperature: 0.2,
+        }
+      });
+    });
+
+    const jsonText = response.text;
+    if (!jsonText) throw new Error("No response from Gemini.");
+
+    const result = JSON.parse(jsonText) as GeminiResponse;
+    result.usedModel = model + " (Text Fallback)";
+    // Ensure transcription in result matches input or is empty if we want to preserve original?
+    // The prompt asks to return JSON with transcription. The model might refine it or just copy it.
+    // If the model re-generates transcription it might be cleaner.
+    // However, for consistency, if the result transcription is empty/different, we might want to merge.
+    // But let's trust the model to follow the schema.
+    return result;
+
+  } catch (error: any) {
+    console.error("Text SOAP generation failed:", error);
+    throw error;
+  }
+};
+
 // Lightweight Text Translation using Gemini 2.5 Flash
 export const translateText = async (text: string, targetLang: string, apiKey: string): Promise<string> => {
   if (!text.trim()) return "";
