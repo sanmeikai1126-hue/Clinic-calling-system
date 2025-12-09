@@ -85,6 +85,10 @@ export class MultimodalLiveClient extends SimpleEventEmitter {
         }
     }
 
+    isConnected(): boolean {
+        return this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+    }
+
     sendSetup(config: LiveConfig) {
         if (!this.ws) return;
 

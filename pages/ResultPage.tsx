@@ -93,6 +93,13 @@ const ResultPage: React.FC = () => {
             a: result.A || result.a || '',
             p: result.P || result.p || ''
           });
+
+          // Clear fallback timeout since we successfully got SOAP
+          if ((window as any).__soapGenerationTimeout) {
+            clearTimeout((window as any).__soapGenerationTimeout);
+            (window as any).__soapGenerationTimeout = null;
+          }
+
           setIsGeneratingSOAP(false);
 
           // Disconnect client after SOAP is generated
@@ -283,10 +290,90 @@ ${transcriptContent}
 
   const handleStopAndGenerateSOAP = async () => {
     if (!liveClient) return;
+
+    // Check if connection is already dead (e.g., user left page idle and it timed out)
+    if (!liveClient.isConnected()) {
+      console.warn('[ResultPage] Connection already dead. Using fallback immediately.');
+      setIsGeneratingSOAP(true);
+
+      try {
+        const apiKey = apiKeys[AIProvider.GEMINI];
+        if (!apiKey) throw new Error("No API Key available for fallback");
+
+        const textToProcess = liveTranscription || "（会話内容は空です）";
+        console.log('[ResultPage] Running immediate fallback, transcript length:', textToProcess.length);
+
+        const fallbackResult = await generateClinicalNoteFromText(textToProcess, apiKey);
+
+        setSoap({
+          s: fallbackResult.soap.s,
+          o: fallbackResult.soap.o,
+          a: fallbackResult.soap.a,
+          p: fallbackResult.soap.p
+        });
+
+        setIsGeneratingSOAP(false);
+        setLiveClient(null);
+
+        // Stop audio recording just in case
+        await stopLiveRecording();
+
+      } catch (e: any) {
+        console.error("Immediate fallback failed:", e);
+        setIsGeneratingSOAP(false);
+        alert(`SOAP生成に失敗しました: ${e.message}`);
+      }
+      return;
+    }
+
     setIsGeneratingSOAP(true);
 
+    // Set up a timeout fallback - if SOAP is not generated within 30 seconds, use standard API
+    const timeoutId = setTimeout(async () => {
+      console.warn('[ResultPage] SOAP generation timeout. Triggering fallback...');
+
+      // Only run fallback if still generating (i.e., Live API didn't complete)
+      if (isGeneratingSOAP) {
+        try {
+          const apiKey = apiKeys[AIProvider.GEMINI];
+          if (!apiKey) throw new Error("No API Key available for fallback");
+
+          const textToProcess = liveTranscription || "（会話内容は空です）";
+          console.log('[ResultPage] Running fallback with transcript length:', textToProcess.length);
+
+          const fallbackResult = await generateClinicalNoteFromText(textToProcess, apiKey);
+
+          setSoap({
+            s: fallbackResult.soap.s,
+            o: fallbackResult.soap.o,
+            a: fallbackResult.soap.a,
+            p: fallbackResult.soap.p
+          });
+
+          setIsGeneratingSOAP(false);
+
+          // Disconnect client if still connected
+          if (liveClient) {
+            try {
+              liveClient.disconnect();
+            } catch (e) {
+              console.warn('Error disconnecting client:', e);
+            }
+            setLiveClient(null);
+          }
+
+        } catch (e: any) {
+          console.error("Fallback generation failed:", e);
+          setIsGeneratingSOAP(false);
+          alert(`SOAP生成に失敗しました: ${e.message}`);
+        }
+      }
+    }, 30000); // 30 second timeout
+
+    // Store timeout ID to clear it if SOAP is successfully generated
+    (window as any).__soapGenerationTimeout = timeoutId;
+
     // Send SOAP generation request with strict JSON format requirement
-    // Optimize: Do NOT send the full transcript again. The model has context.
     const soapGenerationPrompt = `
 ${DERMATOLOGY_PROMPT}
 
@@ -307,6 +394,49 @@ ${DERMATOLOGY_PROMPT}
 
 JSON以外のテキスト、説明、コメントは絶対に出力しないでください。
 `;
+
+    // Set up close/error handlers BEFORE sending the request
+    const handleDisconnectDuringGeneration = async () => {
+      console.warn('[ResultPage] Connection closed during SOAP generation. Checking if fallback needed...');
+
+      // Clear the timeout since we're handling it now
+      if ((window as any).__soapGenerationTimeout) {
+        clearTimeout((window as any).__soapGenerationTimeout);
+      }
+
+      // Give a small delay to see if JSON was already captured
+      setTimeout(async () => {
+        // If still generating, the JSON parse failed or wasn't received
+        if (isGeneratingSOAP) {
+          console.warn('[ResultPage] JSON not received, triggering immediate fallback...');
+          try {
+            const apiKey = apiKeys[AIProvider.GEMINI];
+            if (!apiKey) throw new Error("No API Key available for fallback");
+
+            const textToProcess = liveTranscription || "（会話内容は空です）";
+            const fallbackResult = await generateClinicalNoteFromText(textToProcess, apiKey);
+
+            setSoap({
+              s: fallbackResult.soap.s,
+              o: fallbackResult.soap.o,
+              a: fallbackResult.soap.a,
+              p: fallbackResult.soap.p
+            });
+
+            setIsGeneratingSOAP(false);
+            setLiveClient(null);
+
+          } catch (e: any) {
+            console.error("Immediate fallback failed:", e);
+            setIsGeneratingSOAP(false);
+            alert(`SOAP生成に失敗しました: ${e.message}`);
+          }
+        }
+      }, 500); // 500ms delay to allow JSON parsing to complete
+    };
+
+    liveClient.on('close', handleDisconnectDuringGeneration);
+    liveClient.on('error', handleDisconnectDuringGeneration);
 
     liveClient.sendText(soapGenerationPrompt);
 
