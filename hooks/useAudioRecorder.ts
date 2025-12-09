@@ -97,12 +97,20 @@ export const useAudioRecorder = (): AudioRecorderHook & { getAudioBlob: () => Pr
             processorRef.current.disconnect();
         }
 
+        // マイクは即座に確実に停止
         if (streamRef.current) {
             streamRef.current.getTracks().forEach(track => track.stop());
         }
 
+        // AudioContextは段階的にクローズして他のタブのオーディオへの干渉を防ぐ
         if (audioContextRef.current) {
-            audioContextRef.current.close();
+            const ctx = audioContextRef.current;
+            ctx.suspend().then(() => {
+                // 1秒後にクローズ（Chromeのオーディオセッション安定のため）
+                setTimeout(() => {
+                    ctx.close().catch(() => { });
+                }, 1000);
+            }).catch(() => { });
         }
 
         setIsRecording(false);
