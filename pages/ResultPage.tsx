@@ -164,33 +164,65 @@ const ResultPage: React.FC = () => {
   }, [liveClient, isGeneratingSOAP, liveTranscription, apiKeys]);
 
   // Cleanup on unmount (Ensure audio and client are stopped when leaving)
+  // Use a ref to track if we're truly navigating away vs React StrictMode re-mount
+  const isMountedRef = useRef(true);
   const liveClientRef = useRef(liveClient);
   useEffect(() => { liveClientRef.current = liveClient; }, [liveClient]);
 
   const stopLiveRecordingRef = useRef(stopLiveRecording);
   useEffect(() => { stopLiveRecordingRef.current = stopLiveRecording; }, [stopLiveRecording]);
 
+  // Track mount state
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    // Clear any pending cleanup timeout from previous StrictMode unmount
+    if ((window as any).__resultPageCleanupTimeout) {
+      clearTimeout((window as any).__resultPageCleanupTimeout);
+      (window as any).__resultPageCleanupTimeout = null;
+      console.log('[ResultPage] Cleared pending cleanup (StrictMode re-mount)');
+    }
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // Cleanup effect - delayed to avoid StrictMode false positives
   useEffect(() => {
     return () => {
-      console.log('[ResultPage] Unmounting: cleanup check');
+      console.log('[ResultPage] Unmounting: scheduling cleanup check...');
 
-      // If client is still active (e.g. user went Back without generating), disconnect it
-      if (liveClientRef.current) {
-        console.log('[ResultPage] Disconnecting active client on unmount');
-        try {
-          liveClientRef.current.disconnect();
-        } catch (e) {
-          console.warn('Error disconnecting client:', e);
+      // Delay cleanup to check if this is a real unmount or StrictMode re-mount
+      const cleanupTimeout = setTimeout(() => {
+        // If component re-mounted (StrictMode), don't cleanup
+        if (isMountedRef.current) {
+          console.log('[ResultPage] Re-mounted (StrictMode), skipping cleanup');
+          return;
         }
-        setLiveClient(null);
-      }
 
-      // Always stop audio stream when leaving ResultPage
-      // There is no flow where we need audio after this page.
-      console.log('[ResultPage] Stopping live recording stream on unmount');
-      stopLiveRecordingRef.current();
+        console.log('[ResultPage] Actually unmounting, running cleanup');
+
+        // If client is still active (e.g. user went Back without generating), disconnect it
+        if (liveClientRef.current) {
+          console.log('[ResultPage] Disconnecting active client on unmount');
+          try {
+            liveClientRef.current.disconnect();
+          } catch (e) {
+            console.warn('Error disconnecting client:', e);
+          }
+          setLiveClient(null);
+        }
+
+        // Stop audio stream when leaving ResultPage
+        console.log('[ResultPage] Stopping live recording stream on unmount');
+        stopLiveRecordingRef.current();
+      }, 100); // 100ms delay to let StrictMode re-mount happen
+
+      // Store timeout so it can be cleared if re-mounted
+      (window as any).__resultPageCleanupTimeout = cleanupTimeout;
     };
-  }, []); // Run only on mount/unmount
+  }, [setLiveClient]);
 
   // Debug: Log soap state changes
   useEffect(() => {
