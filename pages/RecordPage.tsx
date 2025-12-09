@@ -51,7 +51,9 @@ const RecordPage: React.FC = () => {
     selectedProvider,
     setSelectedProvider,
     setLiveClient,
+    liveClient,
     startLiveRecording,
+    stopLiveRecording,
     setLiveTranscription,
     appendLiveTranscription
   } = useRecordingStatus();
@@ -104,8 +106,10 @@ const RecordPage: React.FC = () => {
     setProvider(selectedProvider);
   }, [selectedProvider]);
 
+  const isNavigatingToResult = useRef(false);
+
   // Live Mode Logic
-  const startLiveSession = async () => {
+  const startLiveSession = useCallback(async () => {
     const apiKey = apiKeys[AIProvider.GEMINI];
     if (!apiKey) {
       setShowApiKeyModal(true);
@@ -115,6 +119,20 @@ const RecordPage: React.FC = () => {
     try {
       setError(null);
       setLiveTranscription(""); // Clear global state
+
+      // Cleanup any existing client
+      if (liveClient) {
+        console.log('[Live Mode] Disconnecting existing client before new session');
+        try {
+          liveClient.disconnect();
+        } catch (e) {
+          console.warn('Error disconnecting old client:', e);
+        }
+        setLiveClient(null);
+      }
+
+      // Short delay to ensure socket is fully closed and audio is released
+      await new Promise(resolve => setTimeout(resolve, 200));
 
       const client = new MultimodalLiveClient(apiKey);
 
@@ -148,26 +166,68 @@ const RecordPage: React.FC = () => {
       // Start audio streaming using Context (persists across navigation)
       await startLiveRecording((base64) => {
         client.sendAudioChunk(base64);
-      });
+      }, mode);
+
+      // Mark navigation as intentional flow
+      isNavigatingToResult.current = true;
 
       // Navigate to ResultPage immediately
       navigate('/result', {
         state: {
           isLiveMode: true,
           patientInfo: { id: patientId, name: patientName },
-        }
+          autoStart: false
+        },
+        replace: true
       });
 
     } catch (err: any) {
       console.error("Failed to start Live Session:", err);
       setError("Failed to start Live Session: " + err.message);
     }
-  };
+  }, [apiKeys, liveClient, setLiveClient, setLiveTranscription, appendLiveTranscription, startLiveRecording, navigate, patientId, patientName, mode]);
 
-  const stopLiveSession = async () => {
-    // This might not be called if we navigate away, but good for cleanup
-    // stopLiveRecording is now handled in ResultPage or Context
-  };
+  const stopLiveSession = useCallback(async () => {
+    console.log('[Live Mode] Stopping live session and audio');
+    if (liveClient) {
+      try {
+        liveClient.disconnect();
+      } catch (e) {
+        console.error('Error disconnecting client:', e);
+      }
+      setLiveClient(null);
+    }
+    // ensure audio stops
+    await stopLiveRecordingRef.current?.();
+  }, [liveClient, setLiveClient]);
+
+  // Use a ref to access stopLiveRecording inside cleanup (avoid dependency cycle issues if needed, though usually fine)
+  const stopLiveRecordingRef = useRef(stopLiveRecording);
+  useEffect(() => {
+    stopLiveRecordingRef.current = stopLiveRecording;
+  }, [stopLiveRecording]);
+
+  // Strict Cleanup on Unmount
+  useEffect(() => {
+    return () => {
+      // If we are NOT navigating to ResultPage (e.g. Back button, or other link)
+      // AND we are in Live Mode, we should kill the session and audio.
+      if (!isNavigatingToResult.current) {
+        console.log('[RecordPage] Unmounting and NOT going to result -> cleanup audio');
+        // We can't access liveClient state easily in cleanup closure if it changed? 
+        // But we can call the context methods.
+        // Note: we can't call async stopLiveSession easily.
+        stopLiveRecordingRef.current();
+        setRecordingActive(false);
+        // setLiveClient(null) is harder if we don't have access, but disconnecting audio is the main audio leak fix.
+        // To disconnect client, we relies on logic elsewhere or garbage collection closing socket (eventually).
+        // BUT we should try.
+      }
+      // Reset flag
+      isNavigatingToResult.current = false;
+    };
+  }, [setRecordingActive]); // Remove other deps to ensure it runs only on unmount effectively
+
 
 
 
@@ -175,7 +235,7 @@ const RecordPage: React.FC = () => {
   // ----------------------------------------------------------------
   // Main Audio Recording Logic (SOAP Generation)
   // ----------------------------------------------------------------
-  const startMainRecording = async () => {
+  const startMainRecording = useCallback(async () => {
     // Check if key exists for selected provider
     if (!apiKeys[provider]) {
       setShowApiKeyModal(true);
@@ -223,7 +283,7 @@ const RecordPage: React.FC = () => {
       console.error('Error accessing microphone:', err);
       setError("マイクにアクセスできませんでした。設定を確認してください。");
     }
-  };
+  }, [apiKeys, provider, setRecordingActive, setStream]);
 
   const handleStopRequest = () => {
     // If in standard mode, stop and process immediately
@@ -564,10 +624,10 @@ const RecordPage: React.FC = () => {
       if (navState.mode === AppMode.LIVE) {
         // Ensure mode is set before starting
         setMode(AppMode.LIVE);
-        // Slight delay to ensure mode state is updated and UI is ready
+        // Slight delay to ensure mode state is updated and UI is ready, and audio is cleared
         setTimeout(() => {
           startLiveSession();
-        }, 100);
+        }, 500);
       } else {
         startMainRecording();
       }

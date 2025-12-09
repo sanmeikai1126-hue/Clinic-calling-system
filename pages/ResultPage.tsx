@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GeminiResponse, PatientInfo, MedicalRecord } from '../types';
 import { saveRecord } from '../services/storageService';
@@ -155,6 +155,35 @@ const ResultPage: React.FC = () => {
       };
     }
   }, [liveClient, isGeneratingSOAP, liveTranscription, apiKeys]);
+
+  // Cleanup on unmount (Ensure audio and client are stopped when leaving)
+  const liveClientRef = useRef(liveClient);
+  useEffect(() => { liveClientRef.current = liveClient; }, [liveClient]);
+
+  const stopLiveRecordingRef = useRef(stopLiveRecording);
+  useEffect(() => { stopLiveRecordingRef.current = stopLiveRecording; }, [stopLiveRecording]);
+
+  useEffect(() => {
+    return () => {
+      console.log('[ResultPage] Unmounting: cleanup check');
+
+      // If client is still active (e.g. user went Back without generating), disconnect it
+      if (liveClientRef.current) {
+        console.log('[ResultPage] Disconnecting active client on unmount');
+        try {
+          liveClientRef.current.disconnect();
+        } catch (e) {
+          console.warn('Error disconnecting client:', e);
+        }
+        setLiveClient(null);
+      }
+
+      // Always stop audio stream when leaving ResultPage
+      // There is no flow where we need audio after this page.
+      console.log('[ResultPage] Stopping live recording stream on unmount');
+      stopLiveRecordingRef.current();
+    };
+  }, []); // Run only on mount/unmount
 
   // Debug: Log soap state changes
   useEffect(() => {

@@ -27,6 +27,7 @@ export default function CallingPage() {
     const navigate = useNavigate();
     const { selectedProvider, setSelectedProvider } = useRecordingStatus();
     const [isLiveMode, setIsLiveMode] = useState(true);
+    const [autoStartRecording, setAutoStartRecording] = useState(true);
 
     const [history, setHistory] = useLocalStorage<string[]>('clinic-call-history', []);
     const [, setLogs] = useLocalStorage<LogEntry[]>('clinic-call-logs', []);
@@ -87,7 +88,7 @@ export default function CallingPage() {
         setLastCall({ number, division });
 
         const onPlayEnded = () => {
-            if (division === Division.Exam) {
+            if (division === Division.Exam && autoStartRecording) {
                 navigate('/record', {
                     state: {
                         autoStart: true,
@@ -210,38 +211,59 @@ export default function CallingPage() {
                     <span className="text-sm text-slate-500">F1〜F4キー対応</span>
                 </header>
 
-                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50 border border-slate-200 rounded-xl p-3 shadow-inner">
-                    <div className="flex items-center gap-4">
-                        <div className="text-sm font-semibold text-slate-700">録音モデル</div>
-                        <div className="flex gap-2">
-                            {[AIProvider.OPENAI, AIProvider.GEMINI].map((p) => (
-                                <button
-                                    key={p}
-                                    onClick={() => setSelectedProvider(p)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition shadow-sm ${selectedProvider === p
-                                        ? 'bg-teal-600 text-white border-teal-600 shadow-[0_8px_18px_rgba(13,148,136,0.2)]'
-                                        : 'bg-white text-slate-700 border-slate-200 hover:border-slate-300'
-                                        }`}
-                                >
-                                    {p === AIProvider.OPENAI ? 'OpenAI (推奨)' : 'Gemini'}
-                                </button>
-                            ))}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50 border border-slate-200 rounded-xl p-4 shadow-inner">
+                    <div className="flex items-center gap-6">
+                        <div className="flex items-center gap-3">
+                            <div className="text-sm font-bold text-slate-700">録音モデル</div>
+                            <div className="flex bg-white rounded-lg p-1 border border-slate-200">
+                                {[AIProvider.OPENAI, AIProvider.GEMINI].map((p) => (
+                                    <button
+                                        key={p}
+                                        onClick={() => setSelectedProvider(p)}
+                                        className={`px-4 py-1.5 rounded-md text-xs font-bold transition-all ${selectedProvider === p
+                                            ? 'bg-teal-600 text-white shadow-sm'
+                                            : 'text-slate-500 hover:bg-slate-50'
+                                            }`}
+                                    >
+                                        {p === AIProvider.OPENAI ? 'OpenAI (推奨)' : 'Gemini'}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
 
-                    <label className="flex items-center gap-2 cursor-pointer bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm hover:bg-slate-50 transition">
-                        <input
-                            type="checkbox"
-                            checked={isLiveMode}
-                            onChange={(e) => setIsLiveMode(e.target.checked)}
-                            className="w-4 h-4 text-rose-600 rounded focus:ring-rose-500 border-gray-300"
-                        />
-                        <span className={`text-xs font-bold ${isLiveMode ? 'text-rose-600' : 'text-slate-600'}`}>
-                            Liveモード (爆速)
-                        </span>
-                    </label>
-                </div>
+                    <div className="flex items-center gap-4">
+                        <label className={`flex items-center gap-2 px-4 py-2 rounded-lg border cursor-pointer transition-all ${isLiveMode
+                            ? 'bg-white border-rose-200 shadow-sm ring-1 ring-rose-100'
+                            : 'bg-white border-slate-200 hover:bg-slate-50'
+                            }`}>
+                            <input
+                                type="checkbox"
+                                checked={isLiveMode}
+                                onChange={(e) => setIsLiveMode(e.target.checked)}
+                                className="w-4 h-4 text-rose-600 rounded focus:ring-rose-500 border-gray-300"
+                            />
+                            <span className={`text-xs font-bold ${isLiveMode ? 'text-rose-600' : 'text-slate-600'}`}>
+                                Liveモード (爆速)
+                            </span>
+                        </label>
 
+                        <label className={`flex items-center gap-2 px-4 py-2 rounded-lg border cursor-pointer transition-all ${autoStartRecording
+                            ? 'bg-white border-sky-200 shadow-sm ring-1 ring-sky-100'
+                            : 'bg-white border-slate-200 hover:bg-slate-50'
+                            }`}>
+                            <input
+                                type="checkbox"
+                                checked={autoStartRecording}
+                                onChange={(e) => setAutoStartRecording(e.target.checked)}
+                                className="w-4 h-4 text-sky-600 rounded focus:ring-sky-500 border-gray-300"
+                            />
+                            <span className={`text-xs font-bold ${autoStartRecording ? 'text-sky-700' : 'text-slate-600'}`}>
+                                呼び出し後録音開始
+                            </span>
+                        </label>
+                    </div>
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6">
                     <div className="flex flex-col space-y-3">
                         <div className="relative">
