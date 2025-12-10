@@ -92,26 +92,33 @@ export const useAudioRecorder = (): AudioRecorderHook & { getAudioBlob: () => Pr
     }, []);
 
     const stopRecording = useCallback(() => {
+        // 1. ノード接続解除（副作用なし）
         if (processorRef.current && inputRef.current) {
             inputRef.current.disconnect();
             processorRef.current.disconnect();
         }
 
-        // マイクは即座に確実に停止
-        if (streamRef.current) {
-            streamRef.current.getTracks().forEach(track => track.stop());
+        const ctx = audioContextRef.current;
+        const stream = streamRef.current;
+
+        // 2. まずコンテキストをサスペンド（これにより処理負荷を下げる）
+        if (ctx && ctx.state !== 'closed') {
+            ctx.suspend().catch(() => { });
         }
 
-        // AudioContextは段階的にクローズして他のタブのオーディオへの干渉を防ぐ
-        if (audioContextRef.current) {
-            const ctx = audioContextRef.current;
-            ctx.suspend().then(() => {
-                // 1秒後にクローズ（Chromeのオーディオセッション安定のため）
+        // 3. 少し待ってからマイクを物理的に停止（急激な切断を防ぐ）
+        setTimeout(() => {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+
+            // 4. さらに待ってから完全にクローズ（他アプリへの影響が収まってから）
+            if (ctx && ctx.state !== 'closed') {
                 setTimeout(() => {
                     ctx.close().catch(() => { });
-                }, 1000);
-            }).catch(() => { });
-        }
+                }, 2500); // 2.5秒に延長
+            }
+        }, 200); // マイク停止前に200msの猶予
 
         setIsRecording(false);
         streamRef.current = null;
