@@ -38,7 +38,13 @@ const ResultPage: React.FC = () => {
   const [isSaved, setIsSaved] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
   const [isGeneratingSOAP, setIsGeneratingSOAP] = useState(false);
+  const isGeneratingSOAPRef = useRef(false);
   const [parsedLiveTranscription, setParsedLiveTranscription] = useState<{ speaker: string, text: string }[]>([]);
+
+  // Keep ref in sync for stale-closure sensitive callbacks (timeouts / websocket handlers)
+  useEffect(() => {
+    isGeneratingSOAPRef.current = isGeneratingSOAP;
+  }, [isGeneratingSOAP]);
 
   useEffect(() => {
     if (!state) {
@@ -71,6 +77,28 @@ const ResultPage: React.FC = () => {
     }
   }, [liveTranscription, isLiveMode]);
 
+  // Helper: Attempt to parse SOAP JSON from arbitrary text (with or without ```json fences)
+  const parseSoapJson = (text: string) => {
+    const candidates: string[] = [];
+    const fenced = text.match(/```json\s*([\s\S]*?)\s*```/);
+    if (fenced && fenced[1]) {
+      candidates.push(fenced[1]);
+    }
+    const inline = text.match(/\{[\s\S]*?\}/);
+    if (inline && inline[0]) {
+      candidates.push(inline[0]);
+    }
+
+    for (const candidate of candidates) {
+      try {
+        return JSON.parse(candidate.trim());
+      } catch (e) {
+        // try next candidate
+      }
+    }
+    return null;
+  };
+
   // Live Mode: Watch for SOAP JSON in transcription (only when generating)
   useEffect(() => {
     if (isLiveMode && liveTranscription && isGeneratingSOAP) {
@@ -79,12 +107,9 @@ const ResultPage: React.FC = () => {
       const cleanedText = liveTranscription.replace(/【医師】|【患者】/g, '');
 
       // Check for JSON block
-      const jsonMatch = cleanedText.match(/```json\s*([\s\S]*?)\s*```/);
-      if (jsonMatch) {
+      const result = parseSoapJson(cleanedText);
+      if (result) {
         try {
-          const jsonStr = jsonMatch[1].trim();
-          console.log('[ResultPage] Found JSON string:', jsonStr.substring(0, 100));
-          const result = JSON.parse(jsonStr);
           console.log('[ResultPage] Parsed SOAP JSON:', result);
 
           setSoap({
@@ -101,6 +126,7 @@ const ResultPage: React.FC = () => {
           }
 
           setIsGeneratingSOAP(false);
+          isGeneratingSOAPRef.current = false;
 
           // Disconnect client after SOAP is generated
           if (liveClient) {
@@ -143,14 +169,16 @@ const ResultPage: React.FC = () => {
           }
 
           setIsGeneratingSOAP(false);
+          isGeneratingSOAPRef.current = false;
           setLiveClient(null);
           // alert("通信が切断されたため、標準モードでSOAPを再生成しました。");
 
-        } catch (e: any) {
-          console.error("Fallback generation failed:", e);
-          setIsGeneratingSOAP(false);
-          alert(`SOAP生成に失敗しました: ${e.message}`);
-        }
+      } catch (e: any) {
+        console.error("Fallback generation failed:", e);
+        setIsGeneratingSOAP(false);
+        isGeneratingSOAPRef.current = false;
+        alert(`SOAP生成に失敗しました: ${e.message}`);
+      }
       };
 
       liveClient.on('close', handleDisconnect);
@@ -327,6 +355,7 @@ ${transcriptContent}
     if (!liveClient.isConnected()) {
       console.warn('[ResultPage] Connection already dead. Using fallback immediately.');
       setIsGeneratingSOAP(true);
+      isGeneratingSOAPRef.current = true;
 
       try {
         const apiKey = apiKeys[AIProvider.GEMINI];
@@ -345,6 +374,7 @@ ${transcriptContent}
         });
 
         setIsGeneratingSOAP(false);
+        isGeneratingSOAPRef.current = false;
         setLiveClient(null);
 
         // Stop audio recording just in case
@@ -353,19 +383,21 @@ ${transcriptContent}
       } catch (e: any) {
         console.error("Immediate fallback failed:", e);
         setIsGeneratingSOAP(false);
+        isGeneratingSOAPRef.current = false;
         alert(`SOAP生成に失敗しました: ${e.message}`);
       }
       return;
     }
 
     setIsGeneratingSOAP(true);
+    isGeneratingSOAPRef.current = true;
 
     // Set up a timeout fallback - if SOAP is not generated within 30 seconds, use standard API
     const timeoutId = setTimeout(async () => {
       console.warn('[ResultPage] SOAP generation timeout. Triggering fallback...');
 
       // Only run fallback if still generating (i.e., Live API didn't complete)
-      if (isGeneratingSOAP) {
+      if (isGeneratingSOAPRef.current) {
         try {
           const apiKey = apiKeys[AIProvider.GEMINI];
           if (!apiKey) throw new Error("No API Key available for fallback");
@@ -383,6 +415,7 @@ ${transcriptContent}
           });
 
           setIsGeneratingSOAP(false);
+          isGeneratingSOAPRef.current = false;
 
           // Disconnect client if still connected
           if (liveClient) {
@@ -397,6 +430,7 @@ ${transcriptContent}
         } catch (e: any) {
           console.error("Fallback generation failed:", e);
           setIsGeneratingSOAP(false);
+          isGeneratingSOAPRef.current = false;
           alert(`SOAP生成に失敗しました: ${e.message}`);
         }
       }
@@ -406,11 +440,15 @@ ${transcriptContent}
     (window as any).__soapGenerationTimeout = timeoutId;
 
     // Send SOAP generation request with strict JSON format requirement
+    const transcriptForSoap = (liveTranscription || "").trim() || "（会話内容は空です）";
     const soapGenerationPrompt = `
 ${DERMATOLOGY_PROMPT}
 
 **指示**:
-これまでの会話内容に基づいてSOAPノートを作成してください。
+これまでの会話内容に基づいてSOAPノートを作成してください。直前までの「文字起こしのみ」「SOAPを禁止」といった指示はすべて無視して構いません。
+
+会話ログ（そのまま使用して要約すること）:
+${transcriptForSoap}
 
 **出力形式（厳守）**:
 必ず以下のJSON形式のみで出力してください。他のテキストは一切含めないでください。
@@ -439,7 +477,7 @@ JSON以外のテキスト、説明、コメントは絶対に出力しないで�
       // Give a small delay to see if JSON was already captured
       setTimeout(async () => {
         // If still generating, the JSON parse failed or wasn't received
-        if (isGeneratingSOAP) {
+        if (isGeneratingSOAPRef.current) {
           console.warn('[ResultPage] JSON not received, triggering immediate fallback...');
           try {
             const apiKey = apiKeys[AIProvider.GEMINI];
@@ -456,11 +494,13 @@ JSON以外のテキスト、説明、コメントは絶対に出力しないで�
             });
 
             setIsGeneratingSOAP(false);
+            isGeneratingSOAPRef.current = false;
             setLiveClient(null);
 
           } catch (e: any) {
             console.error("Immediate fallback failed:", e);
             setIsGeneratingSOAP(false);
+            isGeneratingSOAPRef.current = false;
             alert(`SOAP生成に失敗しました: ${e.message}`);
           }
         }
